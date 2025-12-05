@@ -1,0 +1,32 @@
+{
+    "search_bar": {
+        "resource_id": "com.walmart.android:id/search_view",
+        "xpath": "//android.widget.EditText[@resource-id=\"com.walmart.android:id/search_view\"]",
+        "fallback": "Search Walmart"
+    },
+    "clear_search_bar":{
+        "resource_id": "com.walmart.android:id/search_view_clear",
+        "xpath": "//android.widget.ImageView[@content-desc=\"Clear Text\"]"
+    },
+    "product_list": {
+        "resource_id": "com.walmart.android:id/recycler_view",
+        "xpath": "//androidx.recyclerview.widget.RecyclerView[@resource-id=\"com.walmart.android:id/recycler_view\"]"
+    },
+    "product_item": {
+        "xpath_pattern": "//androidx.recyclerview.widget.RecyclerView/android.view.ViewGroup[{index}]",
+        "accessibility_id_pattern": "//android.view.ViewGroup[@content-desc=\"{product_name}\"]",
+        "structure": {
+            "viewgroup_1": "Result counts and metadata (skip)",
+            "viewgroup_2": "First product (spacing included inside)",
+            "viewgroup_3": "Second product (spacing included inside)",
+            "viewgroup_4": "Third product",
+            "pattern": "Result count, then all products (spacing is inside each product ViewGroup)"
+        },
+        "first_product_xpath": "//androidx.recyclerview.widget.RecyclerView/android.view.ViewGroup[2]",
+        "note": "Products use accessibility IDs (content-desc) with full product name. Example: 'Great Value Whole Vitamin D Milk, Gallon, Plastic, Jug, 128 fl oz'. First ViewGroup is metadata, second is first product."
+    },
+    "add_to_cart_button": {
+        "resource_id": "com.walmart.android:id/add_to_cart_button",
+        "xpath": "(//android.view.ViewGroup[@resource-id=\"com.walmart.android:id/quantitystepper_root\"])[1]"
+    }
+}
