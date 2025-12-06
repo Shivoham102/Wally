@@ -1,6 +1,7 @@
 """Main FastAPI application for Wally voice AI agent."""
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.api import voice, orders, automation
 
@@ -18,6 +19,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount static files (voice.html interface)
+app.mount("/voice", StaticFiles(directory="static", html=True), name="voice_static")
 
 # Include routers
 app.include_router(voice.router, prefix="/api/v1/voice", tags=["voice"])

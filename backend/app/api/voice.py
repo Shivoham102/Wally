@@ -69,3 +69,32 @@ async def process_text_command(request: TextCommandRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Command processing failed: {str(e)}")
 
+
+class TestCommandRequest(BaseModel):
+    """Request model for test command (direct items, no AI)."""
+    items: list[str]
+
+
+@router.post("/test-command")
+async def test_command(request: TestCommandRequest):
+    """
+    Test endpoint that bypasses OpenAI API calls (no credits used).
+    Directly accepts items list and executes automation.
+    
+    Example: {"items": ["great value whole milk", "18 count eggs"]}
+    """
+    try:
+        # Execute automation directly (no AI calls)
+        from app.services.automation import AutomationService
+        automation_service = AutomationService()
+        
+        result = await automation_service.add_items_to_cart(request.items)
+        
+        return {
+            "items": request.items,
+            "status": result,
+            "note": "Test endpoint - no OpenAI credits used"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Test command failed: {str(e)}")
+

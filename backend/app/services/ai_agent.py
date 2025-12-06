@@ -13,18 +13,28 @@ class AIAgent:
 Your job is to understand user commands and extract structured information.
 
 User commands can be:
-1. Adding items: "Add milk, eggs, and bread" or "I need milk and eggs"
+1. Adding items: "Add milk, eggs, and bread" or "I need 3 milks and 2 eggs"
 2. Reordering: "Add my usual groceries" or "Reorder from last week"
 3. Listing: "What's in my cart?" or "Show my previous orders"
 
+For quantities, users may say:
+- "3 milks" or "three milks" → 3x milk
+- "a dozen eggs" → 12x eggs
+- "2 gallons of milk" → 2x milk
+- Just "milk" → 1x milk (default)
+
 Respond with a JSON object containing:
 - type: One of "add_items", "reorder", "list_items", "unknown"
-- items: List of item names (for add_items)
+- items: List of objects with "item" and "quantity" fields
+  - Always include quantity, even if user doesn't specify (default to 1)
+  - Format: [{"item": "milk", "quantity": 3}, {"item": "eggs", "quantity": 2}]
 - order_id: Order ID if specified (for reorder)
 - confidence: Confidence score 0-1
 
 Example responses:
-{"type": "add_items", "items": ["milk", "eggs", "bread"], "confidence": 0.95}
+{"type": "add_items", "items": [{"item": "milk", "quantity": 1}, {"item": "eggs", "quantity": 1}], "confidence": 0.95}
+{"type": "add_items", "items": [{"item": "milk", "quantity": 3}, {"item": "eggs", "quantity": 2}], "confidence": 0.95}
+{"type": "add_items", "items": [{"item": "eggs", "quantity": 12}, {"item": "gallon milk", "quantity": 2}], "confidence": 0.9}
 {"type": "reorder", "order_id": null, "confidence": 0.9}
 {"type": "list_items", "confidence": 0.85}
 """

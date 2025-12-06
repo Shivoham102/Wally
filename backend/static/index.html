@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wally - Voice Command Interface</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+        
+        .voice-button {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-size: 48px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+            margin: 0 auto;
+            display: block;
+        }
+        
+        .voice-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 15px 40px rgba(102, 126, 234, 0.6);
+        }
+        
+        .voice-button:active {
+            transform: scale(0.95);
+        }
+        
+        .voice-button.recording {
+            animation: pulse 1.5s infinite;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        
+        .status {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 18px;
+            color: #666;
+            min-height: 30px;
+        }
+        
+        .status.recording {
+            color: #f5576c;
+            font-weight: 600;
+        }
+        
+        .transcript {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            min-height: 80px;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .transcript.empty {
+            color: #999;
+            font-style: italic;
+        }
+        
+        .result {
+            margin-top: 20px;
+            padding: 20px;
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            border-radius: 5px;
+            display: none;
+        }
+        
+        .result.show {
+            display: block;
+        }
+        
+        .result.error {
+            background: #ffebee;
+            border-left-color: #f44336;
+        }
+        
+        .instructions {
+            margin-top: 30px;
+            padding: 20px;
+            background: #fff3cd;
+            border-radius: 10px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        .instructions h3 {
+            margin-bottom: 10px;
+            color: #856404;
+        }
+        
+        .instructions ul {
+            margin-left: 20px;
+        }
+        
+        .instructions li {
+            margin: 5px 0;
+            color: #856404;
+        }
+        
+        .button-container {
+            text-align: center;
+            margin: 30px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛒 Wally</h1>
+        <p class="subtitle">Voice AI Assistant for Walmart</p>
+        
+        <div class="button-container">
+            <button class="voice-button" id="voiceButton">🎤</button>
+        </div>
+        
+        <div class="status" id="status">Click the microphone to start</div>
+        
+        <div class="transcript empty" id="transcript">
+            Your voice command will appear here...
+        </div>
+        
+        <div class="result" id="result"></div>
+        
+        <div class="instructions">
+            <h3>📝 How to use:</h3>
+            <ul>
+                <li>Click the microphone button and speak your command</li>
+                <li>Example: "Add 3 milks and 2 eggs"</li>
+                <li>Example: "Add great value whole milk"</li>
+                <li>The AI will understand and add items to your cart</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        const voiceButton = document.getElementById('voiceButton');
+        const status = document.getElementById('status');
+        const transcript = document.getElementById('transcript');
+        const result = document.getElementById('result');
+
+        voiceButton.addEventListener('click', toggleRecording);
+
+        async function toggleRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                // Stop recording
+                mediaRecorder.stop();
+                voiceButton.classList.remove('recording');
+                status.textContent = 'Processing...';
+                status.classList.remove('recording');
+            } else {
+                // Start recording
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+
+                    mediaRecorder.ondataavailable = (event) => {
+                        audioChunks.push(event.data);
+                    };
+
+                    mediaRecorder.onstop = async () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        await sendAudio(audioBlob);
+                        
+                        // Stop all tracks
+                        stream.getTracks().forEach(track => track.stop());
+                    };
+
+                    mediaRecorder.start();
+                    voiceButton.classList.add('recording');
+                    status.textContent = '🎙️ Recording... Click again to stop';
+                    status.classList.add('recording');
+                    transcript.textContent = 'Listening...';
+                    transcript.classList.remove('empty');
+                    result.classList.remove('show');
+                } catch (error) {
+                    console.error('Error accessing microphone:', error);
+                    status.textContent = 'Error: Could not access microphone';
+                    alert('Please allow microphone access to use voice commands');
+                }
+            }
+        }
+
+        async function sendAudio(audioBlob) {
+            try {
+                const formData = new FormData();
+                formData.append('audio_file', audioBlob, 'voice_command.webm');
+
+                const response = await fetch('/api/v1/voice/process-command', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                // Display transcript
+                if (data.transcription) {
+                    transcript.textContent = `"${data.transcription}"`;
+                    transcript.classList.remove('empty');
+                }
+
+                // Display result
+                if (data.result) {
+                    displayResult(data);
+                    status.textContent = 'Done! Click to record again';
+                } else {
+                    status.textContent = 'Error processing command';
+                    result.textContent = 'Failed to process command';
+                    result.classList.add('show', 'error');
+                }
+
+            } catch (error) {
+                console.error('Error sending audio:', error);
+                status.textContent = 'Error sending audio';
+                result.textContent = `Error: ${error.message}`;
+                result.classList.add('show', 'error');
+            }
+        }
+
+        function displayResult(data) {
+            result.classList.remove('error');
+            result.classList.add('show');
+
+            const intent = data.intent || {};
+            const resultData = data.result || {};
+
+            let html = '<h3>✅ Command Processed</h3>';
+            
+            if (intent.type === 'add_items') {
+                const items = intent.items || [];
+                html += '<p><strong>Items:</strong></p><ul>';
+                items.forEach(item => {
+                    if (typeof item === 'object') {
+                        html += `<li>${item.quantity}x ${item.item}</li>`;
+                    } else {
+                        html += `<li>${item}</li>`;
+                    }
+                });
+                html += '</ul>';
+
+                if (resultData.status) {
+                    const status = resultData.status;
+                    if (status.success) {
+                        html += '<p style="color: green; font-weight: bold;">✅ Successfully added to cart!</p>';
+                    } else {
+                        html += '<p style="color: red;">❌ Some items failed:</p>';
+                        html += '<ul>';
+                        (status.results || []).forEach(r => {
+                            const icon = r.success ? '✅' : '❌';
+                            html += `<li>${icon} ${r.item}: ${r.message}</li>`;
+                        });
+                        html += '</ul>';
+                    }
+                }
+            } else {
+                html += `<p>Intent: ${intent.type}</p>`;
+                html += `<p>${JSON.stringify(resultData, null, 2)}</p>`;
+            }
+
+            result.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
+

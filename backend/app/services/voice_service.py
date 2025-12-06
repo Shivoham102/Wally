@@ -53,6 +53,12 @@ class VoiceService:
         # Step 1: Transcribe audio
         transcription = await self.transcribe_audio(audio_data, filename)
         
+        print("=" * 60)
+        print("🎤 VOICE TRANSCRIPTION:")
+        print(f"Audio file: {filename}")
+        print(f"Transcription: {transcription}")
+        print("=" * 60)
+        
         # Step 2: Process text command
         result = await self.process_text_command(transcription)
         result["transcription"] = transcription
@@ -71,6 +77,13 @@ class VoiceService:
         """
         # Use AI agent to understand intent
         intent = await self.ai_agent.understand_intent(command)
+        
+        # Log the LLM response for debugging
+        print("=" * 60)
+        print("🤖 LLM INTENT RECOGNITION RESPONSE:")
+        print(f"Command: {command}")
+        print(f"Intent: {intent}")
+        print("=" * 60)
         
         # Execute the command based on intent
         execution_result = await self._execute_intent(intent, command)
@@ -95,9 +108,25 @@ class VoiceService:
         intent_type = intent.get("type")
         
         if intent_type == "add_items":
-            items = intent.get("items", [])
-            result = await self.automation_service.add_items_to_cart(items)
-            return {"action": "add_items", "items": items, "status": result}
+            items_data = intent.get("items", [])
+            
+            # Convert items to format expected by automation service
+            # LLM returns: [{"item": "milk", "quantity": 3}, {"item": "eggs", "quantity": 2}]
+            # Automation expects: ["3 milk", "2 eggs"] or will parse quantities itself
+            items_for_automation = []
+            
+            for item_obj in items_data:
+                # Handle both object format (from LLM) and string format (fallback)
+                if isinstance(item_obj, dict):
+                    item_name = item_obj.get("item", "")
+                    quantity = item_obj.get("quantity", 1)
+                    items_for_automation.append(f"{quantity} {item_name}")
+                elif isinstance(item_obj, str):
+                    # Fallback: already a string like "3 milk" or just "milk"
+                    items_for_automation.append(item_obj)
+            
+            result = await self.automation_service.add_items_to_cart(items_for_automation)
+            return {"action": "add_items", "items": items_data, "status": result}
         
         elif intent_type == "reorder":
             order_id = intent.get("order_id")

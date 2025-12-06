@@ -1,0 +1,66 @@
+{
+    "search_bar": {
+        "resource_id": "com.walmart.android:id/search_view",
+        "xpath": "//android.widget.EditText[@resource-id=\"com.walmart.android:id/search_view\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/search_api_view\")",
+        "fallback": "Search Walmart"
+    },
+    "clear_search_bar": {
+        "resource_id": "com.walmart.android:id/search_view_clear",
+        "xpath": "//android.widget.ImageView[@content-desc=\"Clear Text\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/search_view_clear\")"
+    },
+    "product_list": {
+        "resource_id": "com.walmart.android:id/content_container_main_module",
+        "xpath": "//androidx.recyclerview.widget.RecyclerView[@resource-id=\"com.walmart.android:id/content_container_main_module\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/tempo_components_internal_contentContainerView\")",
+        "note": "Products RecyclerView - second RecyclerView in layout"
+    },
+    "filters_recycler": {
+        "resource_id": "com.walmart.android:id/tempo_shared_internal_content_container_top",
+        "xpath": "//androidx.recyclerview.widget.RecyclerView[@resource-id=\"com.walmart.android:id/tempo_shared_internal_content_container_top\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/carousel_container\").instance(0)",
+        "note": "Filters RecyclerView - first RecyclerView (SKIP THIS)"
+    },
+    "product_item": {
+        "xpath_pattern": "//androidx.recyclerview.widget.RecyclerView/android.view.ViewGroup[{index}]",
+        "accessibility_id_pattern": "//android.view.ViewGroup[@content-desc=\"{product_name}\"]",
+        "structure": {
+            "viewgroup_1": "Result counts and metadata (skip)",
+            "viewgroup_2": "First product (spacing included inside)",
+            "viewgroup_3": "Second product (spacing included inside)",
+            "viewgroup_4": "Third product",
+            "pattern": "Result count, then all products (spacing is inside each product ViewGroup)"
+        },
+        "first_product_xpath": "//androidx.recyclerview.widget.RecyclerView[@resource-id='com.walmart.android:id/content_container_main_module']/android.widget.FrameLayout[last()]/androidx.recyclerview.widget.RecyclerView/android.view.ViewGroup[2]",
+        "first_product_uiselector": "new UiSelector().className(\"android.view.ViewGroup\").instance(26)",
+        "note": "UiSelector is more reliable for Android. Get instance number from Inspector - click first product and copy UiSelector. Structure: content_container_main_module (RecyclerView) -> last FrameLayout (skip ads) -> RecyclerView -> ViewGroup[2] (first product). Products use accessibility IDs (content-desc) with full product name."
+    },
+    "add_to_cart_button": {
+        "resource_id": "com.walmart.android:id/add_to_cart_button",
+        "xpath": "(//android.view.ViewGroup[@resource-id=\"com.walmart.android:id/quantitystepper_root\"])[1]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/quantitystepper_root\").instance(0)"
+    },
+    "cart_button": {
+        "resource_id": "com.walmart.android:id/cart_summary_icon",
+        "xpath": "//android.widget.ImageView[@content-desc=\"Cart contains 0 items, order total is $0.00\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/cart_summary_icon\")"
+    },
+    "address_button": {
+        "resource_id": "com.walmart.android:id/address_button",
+        "xpath": "//android.widget.TextView[@content-desc=\"Address\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/address_button\")"
+    },
+    "cart_plus_button": {
+        "resource_id": "com.walmart.android:id/button_plus",
+        "xpath": "//android.widget.ImageButton[@resource-id=\"com.walmart.android:id/button_plus\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/button_plus\")",
+        "note": "Plus button to increase quantity. Appears after clicking add to cart. Use resource_id (stable), not content-desc (dynamic)."
+    },
+    "cart_minus_button": {
+        "resource_id": "com.walmart.android:id/button_minus",
+        "xpath": "//android.widget.ImageButton[@resource-id=\"com.walmart.android:id/button_minus\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/button_minus\")",
+        "note": "Minus button to decrease quantity. Appears after clicking add to cart. Use resource_id (stable), not content-desc (dynamic)."
+    }
+}
