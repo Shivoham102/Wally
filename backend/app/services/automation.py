@@ -398,11 +398,12 @@ class AutomationService:
             try:
                 screen_size = self.driver.get_window_size()
                 # Scroll down by swiping up (moves content up, revealing products below)
+                # Scroll amount: 15% of screen height (from 70% to 55%)
                 self.driver.swipe(
                     int(screen_size['width'] / 2),
                     int(screen_size['height'] * 0.7),  # Start from 70% down
                     int(screen_size['width'] / 2),
-                    int(screen_size['height'] * 0.3),  # Move to 30% down (scrolls content up)
+                    int(screen_size['height'] * 0.55),  # Move to 55% down (15% scroll)
                     500  # duration in ms
                 )
                 time.sleep(0.5)  # Wait for scroll to complete and UI to settle
@@ -636,5 +637,4 @@ class AutomationService:
             self.driver.quit()
             self.driver = None
         self.connected = False
-
 
