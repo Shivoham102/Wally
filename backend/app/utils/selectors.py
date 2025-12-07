@@ -65,8 +65,13 @@ class WalmartSelectors:
     
     @property
     def first_product_uiselector(self) -> str:
-        """Get first product UiSelector."""
+        """Get first product UiSelector (recommended - uses product_tile_list_view resource ID)."""
         return self.get("product_item", {}).get("first_product_uiselector", "")
+    
+    @property
+    def first_product_resource_id(self) -> str:
+        """Get first product resource ID (product_tile_list_view - automatically ignores ads)."""
+        return self.get("product_item", {}).get("resource_id", "")
     
     @property
     def add_to_cart_xpath(self) -> str:
@@ -77,6 +82,16 @@ class WalmartSelectors:
     def add_to_cart_uiselector(self) -> str:
         """Get add to cart button UiSelector."""
         return self.get("add_to_cart_button", {}).get("uiselector", "")
+    
+    @property
+    def add_to_cart_xpath_scoped(self) -> str:
+        """Get add to cart button XPath scoped to first product (recommended - ignores ads)."""
+        return self.get("add_to_cart_button", {}).get("xpath_scoped", "")
+    
+    @property
+    def add_to_cart_uiselector_scoped(self) -> str:
+        """Get add to cart button UiSelector scoped to first product (recommended - ignores ads)."""
+        return self.get("add_to_cart_button", {}).get("uiselector_scoped", "")
     
     @property
     def cart_plus_button_id(self) -> str:

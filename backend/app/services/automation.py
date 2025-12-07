@@ -296,6 +296,65 @@ class AutomationService:
             "results": results
         }
     
+    async def add_items_to_cart_structured(self, items: List[dict]) -> dict:
+        """
+        Add multiple items to cart using structured format (no regex parsing).
+        
+        Args:
+            items: List of dicts with "item" and "quantity" keys
+                  Format: [{"item": "milk", "quantity": 2}, {"item": "eggs", "quantity": 1}]
+        
+        Returns:
+            Result dictionary with success status for each item
+        """
+        results = []
+        
+        for item_data in items:
+            try:
+                # Extract item name and quantity directly (no parsing needed)
+                item_name = item_data.get("item", "")
+                quantity = item_data.get("quantity", 1)
+                
+                if not item_name:
+                    results.append({
+                        "item": item_data,
+                        "success": False,
+                        "message": "Item name is required"
+                    })
+                    continue
+                
+                # Search for item
+                search_result = await self.search_item(item_name)
+                
+                if search_result.get("success"):
+                    # Add first result to cart with specified quantity
+                    add_result = await self._add_first_result_to_cart(search_term=item_name, quantity=quantity)
+                    results.append({
+                        "item": item_name,
+                        "quantity": quantity,
+                        "success": add_result.get("success", False),
+                        "message": add_result.get("message", "")
+                    })
+                else:
+                    results.append({
+                        "item": item_name,
+                        "quantity": quantity,
+                        "success": False,
+                        "message": f"Failed to search for {item_name}"
+                    })
+            
+            except Exception as e:
+                results.append({
+                    "item": item_data,
+                    "success": False,
+                    "message": f"Error: {str(e)}"
+                })
+        
+        return {
+            "success": all(r["success"] for r in results),
+            "results": results
+        }
+    
     async def _add_first_result_to_cart(self, search_term: str = None, quantity: int = 1) -> dict:
         """
         Add the first search result to cart directly from search results page.
@@ -334,39 +393,196 @@ class AutomationService:
                 except Exception as e:
                     return {"success": False, "message": f"❌ STEP 1 FAILED - Products RecyclerView not found: {str(e)}"}
             
-            # Step 2: Find add to cart button directly (XPath is working based on logs, so try it first)
+            # MANDATORY SCROLL: Scroll down a bit to ensure first product and add to cart button are in view
+            # This is necessary because ads or other elements might push products off-screen
             try:
-                # Since XPath is working (from logs), try it first for speed
-                add_to_cart_button = wait.until(
-                    EC.element_to_be_clickable((By.XPATH, selectors.add_to_cart_xpath))
+                screen_size = self.driver.get_window_size()
+                # Scroll down by swiping up (moves content up, revealing products below)
+                self.driver.swipe(
+                    int(screen_size['width'] / 2),
+                    int(screen_size['height'] * 0.7),  # Start from 70% down
+                    int(screen_size['width'] / 2),
+                    int(screen_size['height'] * 0.3),  # Move to 30% down (scrolls content up)
+                    500  # duration in ms
                 )
-                add_to_cart_button.click()
+                time.sleep(0.5)  # Wait for scroll to complete and UI to settle
+            except Exception as e:
+                # If scroll fails, continue anyway - element might already be visible
+                pass
+            
+            # Helper function to find and scroll element into view, then click
+            def find_and_click_element(xpath=None, uiselector=None, resource_id=None, scroll_into_view=True):
+                """Find element, scroll into view if needed, then click."""
+                element = None
+                
+                # Try to find element (presence check, not clickable - element might be off-screen)
+                if xpath:
+                    try:
+                        element = wait.until(EC.presence_of_element_located((By.XPATH, xpath)))
+                    except:
+                        pass
+                
+                if not element and uiselector:
+                    try:
+                        element = wait.until(EC.presence_of_element_located((By.ANDROID_UIAUTOMATOR, uiselector)))
+                    except:
+                        pass
+                
+                if not element and resource_id:
+                    try:
+                        element = wait.until(EC.presence_of_element_located((By.ID, resource_id)))
+                    except:
+                        pass
+                
+                if not element:
+                    return False, "Element not found"
+                
+                # VALIDATION: Ensure element is NOT in an ad container
+                # Ads don't have product_tile_list_view or quantitystepper_root, but let's double-check
+                try:
+                    # Check if element is inside ad_container
+                    parent_xpath = "./ancestor::android.widget.FrameLayout[@resource-id='com.walmart.android:id/ad_container']"
+                    ad_parents = element.find_elements(By.XPATH, parent_xpath)
+                    if ad_parents:
+                        return False, "Element is inside ad_container - this should not happen! Ads don't have product_tile_list_view or quantitystepper_root."
+                    
+                    # Also verify element is inside a product_tile_list_view (for quantitystepper_root)
+                    if resource_id and "quantitystepper" in resource_id:
+                        product_parent_xpath = "./ancestor::android.view.ViewGroup[@resource-id='com.walmart.android:id/product_tile_list_view']"
+                        product_parents = element.find_elements(By.XPATH, product_parent_xpath)
+                        if not product_parents:
+                            return False, "quantitystepper_root not inside product_tile_list_view - might be wrong element"
+                except:
+                    pass  # If validation fails, continue anyway (better to try than fail)
+                
+                # Always scroll element into view to ensure button is fully visible
+                if scroll_into_view:
+                    max_scroll_attempts = 5  # Prevent infinite scrolling
+                    scroll_attempt = 0
+                    
+                    while scroll_attempt < max_scroll_attempts:
+                        try:
+                            # Get element location and size
+                            location = element.location
+                            size = element.size
+                            screen_size = self.driver.get_window_size()
+                            
+                            # Calculate button's bottom Y coordinate (we want this visible)
+                            button_bottom_y = location['y'] + size['height']
+                            button_top_y = location['y']
+                            
+                            # Check if button is fully visible (top and bottom within screen bounds)
+                            # Add some margin (50px) to ensure it's comfortably visible
+                            margin = 50
+                            screen_bottom = screen_size['height'] - margin
+                            screen_top = margin
+                            
+                            # If button is fully visible, break
+                            if button_top_y >= screen_top and button_bottom_y <= screen_bottom:
+                                break
+                            
+                            # Determine scroll direction and amount
+                            if button_bottom_y > screen_bottom:
+                                # Button is below screen, scroll down (swipe up)
+                                scroll_amount = min(button_bottom_y - screen_bottom + margin, screen_size['height'] * 0.5)
+                                self.driver.swipe(
+                                    int(screen_size['width'] / 2),
+                                    int(screen_size['height'] * 0.7),  # Start from 70% down
+                                    int(screen_size['width'] / 2),
+                                    int(screen_size['height'] * 0.7 - scroll_amount),  # Move up
+                                    600  # duration in ms
+                                )
+                            elif button_top_y < screen_top:
+                                # Button is above screen, scroll up (swipe down)
+                                scroll_amount = min(screen_top - button_top_y + margin, screen_size['height'] * 0.5)
+                                self.driver.swipe(
+                                    int(screen_size['width'] / 2),
+                                    int(screen_size['height'] * 0.3),  # Start from 30% down
+                                    int(screen_size['width'] / 2),
+                                    int(screen_size['height'] * 0.3 + scroll_amount),  # Move down
+                                    600  # duration in ms
+                                )
+                            else:
+                                # Button is partially visible, fine-tune scroll
+                                if button_bottom_y > screen_bottom:
+                                    # Need to scroll down a bit more
+                                    self.driver.swipe(
+                                        int(screen_size['width'] / 2),
+                                        int(screen_size['height'] * 0.8),
+                                        int(screen_size['width'] / 2),
+                                        int(screen_size['height'] * 0.5),
+                                        500
+                                    )
+                            
+                            time.sleep(0.4)  # Wait for scroll to complete
+                            scroll_attempt += 1
+                            
+                            # Re-find element after scroll (location may have changed)
+                            try:
+                                if xpath:
+                                    element = self.driver.find_element(By.XPATH, xpath)
+                                elif uiselector:
+                                    element = self.driver.find_element(By.ANDROID_UIAUTOMATOR, uiselector)
+                                elif resource_id:
+                                    element = self.driver.find_element(By.ID, resource_id)
+                            except:
+                                break  # Element lost, break and try to click anyway
+                                
+                        except Exception as e:
+                            # If scrolling fails, break and try clicking
+                            break
+                
+                # Now try to click (element should be visible)
+                try:
+                    # Wait for element to be clickable (now that it's scrolled into view)
+                    clickable_element = wait.until(EC.element_to_be_clickable(element))
+                    clickable_element.click()
+                    return True, "Success"
+                except Exception as e:
+                    return False, f"Element found but not clickable: {str(e)}"
+            
+            # Step 2: Find add to cart button directly (use scoped XPath first to avoid ads)
+            try:
+                # Try scoped XPath first - ensures we're in products RecyclerView, not ads
+                scoped_xpath = selectors.add_to_cart_xpath_scoped
+                if scoped_xpath:
+                    success, msg = find_and_click_element(xpath=scoped_xpath)
+                    if success:
+                        pass  # Success, continue
+                    else:
+                        raise Exception(msg)
+                else:
+                    raise Exception("Scoped XPath not available")
                 # No sleep needed - click is immediate
                     
             except Exception as e1:
-                # Fallback 1: Try UiSelector
+                # Fallback to regular XPath
                 try:
-                    add_to_cart_uiselector = selectors.add_to_cart_uiselector
-                    if add_to_cart_uiselector:
-                        add_to_cart_button = wait.until(
-                            EC.element_to_be_clickable((By.ANDROID_UIAUTOMATOR, add_to_cart_uiselector))
-                        )
-                        add_to_cart_button.click()
-                    else:
-                        raise Exception("UiSelector not configured")
-                except Exception as e2:
-                    # Fallback 2: Try resource ID
+                    success, msg = find_and_click_element(xpath=selectors.add_to_cart_xpath)
+                    if not success:
+                        raise Exception(msg)
+                except Exception as e1_alt:
+                    # Fallback 1: Try UiSelector
                     try:
-                        resource_id = selectors.get("add_to_cart_button", {}).get("resource_id", "")
-                        if resource_id:
-                            add_to_cart_button = wait.until(
-                                EC.element_to_be_clickable((By.ID, resource_id))
-                            )
-                            add_to_cart_button.click()
+                        add_to_cart_uiselector = selectors.add_to_cart_uiselector
+                        if add_to_cart_uiselector:
+                            success, msg = find_and_click_element(uiselector=add_to_cart_uiselector)
+                            if not success:
+                                raise Exception(msg)
                         else:
-                            raise Exception("Resource ID not configured")
-                    except Exception as e3:
-                        return {"success": False, "message": f"❌ STEP 2 FAILED - Add to Cart button not found. XPath: {str(e1)[:80]}... UiSelector: {str(e2)[:80]}... ResourceID: {str(e3)[:80]}..."}
+                            raise Exception("UiSelector not configured")
+                    except Exception as e2:
+                        # Fallback 2: Try resource ID
+                        try:
+                            resource_id = selectors.get("add_to_cart_button", {}).get("resource_id", "")
+                            if resource_id:
+                                success, msg = find_and_click_element(resource_id=resource_id)
+                                if not success:
+                                    raise Exception(msg)
+                            else:
+                                raise Exception("Resource ID not configured")
+                        except Exception as e3:
+                            return {"success": False, "message": f"❌ STEP 2 FAILED - Add to Cart button not found. ScopedXPath: {str(e1)[:80]}... XPath: {str(e1_alt)[:80]}... UiSelector: {str(e2)[:80]}... ResourceID: {str(e3)[:80]}..."}
             
             # Step 3: If quantity > 1, click the plus button (quantity - 1) times
             if quantity > 1:

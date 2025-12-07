@@ -1,9 +1,23 @@
 """Mobile automation API endpoints."""
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from typing import List
 from app.services.automation import AutomationService
 
 router = APIRouter()
 automation_service = AutomationService()
+
+
+class AddItemRequest(BaseModel):
+    """Request model for adding a single item with quantity (matches LLM format)."""
+    item: str  # Matches LLM output format
+    quantity: int = 1
+
+
+class AddItemsRequest(BaseModel):
+    """Request model for adding multiple items directly (no AI, no regex parsing)."""
+    intent: str = "add_items"  # Explicit intent type
+    items: List[AddItemRequest]
 
 
 @router.post("/connect")
@@ -59,6 +73,41 @@ async def search_item(item_name: str):
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to search item: {str(e)}")
+
+
+@router.post("/add-items-direct")
+async def add_items_direct(request: AddItemsRequest):
+    """
+    Add items to cart directly without using AI or regex parsing.
+    
+    This endpoint bypasses AI processing and regex parsing. It accepts items
+    in the exact format that the LLM would output and passes them directly
+    to the automation service.
+    
+    Example request (matches LLM output format):
+    {
+        "intent": "add_items",
+        "items": [
+            {"item": "milk", "quantity": 2},
+            {"item": "eggs", "quantity": 1}
+        ]
+    }
+    """
+    try:
+        # Convert Pydantic models to dicts in LLM format
+        items_structured = [{"item": item.item, "quantity": item.quantity} for item in request.items]
+        
+        # Execute automation directly (no AI calls, no regex parsing)
+        result = await automation_service.add_items_to_cart_structured(items_structured)
+        
+        return {
+            "intent": request.intent,
+            "items": items_structured,
+            "result": result,
+            "note": "Direct endpoint - no AI processing or regex parsing used"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to add items: {str(e)}")
 
 
 

@@ -93,6 +93,11 @@ curl -X POST "http://localhost:8000/api/v1/automation/connect"
 curl "http://localhost:8000/api/v1/orders/history"
 ```
 
+### Hardcoded query (bypass LLM usage)
+```bash
+curl -X POST http://localhost:8000/api/v1/automation/add-items-direct -H "Content-Type: application/json" -d "{\"intent\": \"add_items\", \"items\": [{\"item\": \"greek yogurt\", \"quantity\": 2}, {\"item\": \"coffee\", \"quantity\": 1}]}"
+```
+
 ## Troubleshooting
 
 **"No module named 'app'"**

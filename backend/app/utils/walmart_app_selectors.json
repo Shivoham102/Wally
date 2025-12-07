@@ -23,6 +23,7 @@
         "note": "Filters RecyclerView - first RecyclerView (SKIP THIS)"
     },
     "product_item": {
+        "resource_id": "com.walmart.android:id/product_tile_list_view",
         "xpath_pattern": "//androidx.recyclerview.widget.RecyclerView/android.view.ViewGroup[{index}]",
         "accessibility_id_pattern": "//android.view.ViewGroup[@content-desc=\"{product_name}\"]",
         "structure": {
@@ -32,14 +33,19 @@
             "viewgroup_4": "Third product",
             "pattern": "Result count, then all products (spacing is inside each product ViewGroup)"
         },
-        "first_product_xpath": "//androidx.recyclerview.widget.RecyclerView[@resource-id='com.walmart.android:id/content_container_main_module']/android.widget.FrameLayout[last()]/androidx.recyclerview.widget.RecyclerView/android.view.ViewGroup[2]",
-        "first_product_uiselector": "new UiSelector().className(\"android.view.ViewGroup\").instance(26)",
-        "note": "UiSelector is more reliable for Android. Get instance number from Inspector - click first product and copy UiSelector. Structure: content_container_main_module (RecyclerView) -> last FrameLayout (skip ads) -> RecyclerView -> ViewGroup[2] (first product). Products use accessibility IDs (content-desc) with full product name."
+        "first_product_xpath": "//androidx.recyclerview.widget.RecyclerView[@resource-id='com.walmart.android:id/recycler_view']/android.view.ViewGroup[2]//android.view.ViewGroup[@resource-id='com.walmart.android:id/product_tile_list_view']",
+        "first_product_xpath_alt": "//androidx.recyclerview.widget.RecyclerView[@resource-id='com.walmart.android:id/recycler_view']/android.view.ViewGroup[2]",
+        "first_product_xpath_safe": "//androidx.recyclerview.widget.RecyclerView[@resource-id='com.walmart.android:id/recycler_view']/android.view.ViewGroup[2]/android.view.ViewGroup[@resource-id='com.walmart.android:id/product_tile_list_view' and not(.//android.view.ViewGroup[@resource-id='com.walmart.android:id/product_tile_sponsored_label'])]",
+        "first_product_uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/product_tile_list_view\").instance(0)",
+        "note": "ROBUST APPROACH: Navigate through hierarchy - Find products RecyclerView (recycler_view) -> Get child at index 1 (first product, skipping header at index 0) -> Find product_tile_list_view within. This ensures we're in the products RecyclerView and skip the header. Ads are in separate container (ad_container) and won't be in this RecyclerView."
     },
     "add_to_cart_button": {
         "resource_id": "com.walmart.android:id/add_to_cart_button",
         "xpath": "(//android.view.ViewGroup[@resource-id=\"com.walmart.android:id/quantitystepper_root\"])[1]",
-        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/quantitystepper_root\").instance(0)"
+        "xpath_scoped": "//androidx.recyclerview.widget.RecyclerView[@resource-id='com.walmart.android:id/recycler_view']/android.view.ViewGroup[2]//android.view.ViewGroup[@resource-id='com.walmart.android:id/quantitystepper_root']",
+        "xpath_exclude_ads": "//android.view.ViewGroup[@resource-id='com.walmart.android:id/product_tile_list_view'][not(ancestor::android.widget.FrameLayout[@resource-id='com.walmart.android:id/ad_container'])]//android.view.ViewGroup[@resource-id='com.walmart.android:id/quantitystepper_root']",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/quantitystepper_root\").instance(0)",
+        "note": "IMPORTANT: Ads do NOT have product_tile_list_view or quantitystepper_root. If finding ads, check: 1) Wrong instance number, 2) XPath not scoped to products RecyclerView, 3) Element hierarchy changed. Use xpath_scoped or xpath_exclude_ads to explicitly avoid ads."
     },
     "cart_button": {
         "resource_id": "com.walmart.android:id/cart_summary_icon",
