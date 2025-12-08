@@ -68,5 +68,64 @@
         "xpath": "//android.widget.ImageButton[@resource-id=\"com.walmart.android:id/button_minus\"]",
         "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/button_minus\")",
         "note": "Minus button to decrease quantity. Appears after clicking add to cart. Use resource_id (stable), not content-desc (dynamic)."
+    },
+    "account_button": {
+        "resource_id": "com.walmart.android:id/navigation_tab_5",
+        "xpath": "//android.widget.FrameLayout[@content-desc=\"Account\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/navigation_tab_5\")",
+        "note": "Automation button to enable automation mode. Use resource_id (stable), not content-desc (dynamic)."
+    },
+    "last_order_card": {
+        "xpath": "//android.widget.FrameLayout[@content-desc=\"Account\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/card_content\").instance(0)"
+    },
+    "last_order_list":{
+        "xpath": "(//android.widget.LinearLayout[@resource-id=\"com.walmart.android:id/image_carousel\"])[1]",
+        "uiselector": "(//android.widget.LinearLayout[@resource-id=\"com.walmart.android:id/image_carousel\"])[1]"
+    },
+    "reorder_all_items_button":{
+        "resource_id": "com.walmart.android:id/reorder_button",
+        "xpath": "//android.widget.Button[@resource-id=\"com.walmart.android:id/reorder_button\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/reorder_button\")"
+    },
+    "order_details_card":{
+        "resource_id": "com.walmart.android:id/group_details",
+        "xpath": "//android.widget.LinearLayout[@resource-id=\"com.walmart.android:id/group_details\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/group_details\")"
+    },
+    "order_details_customer_name":{
+        "resource_id": "com.walmart.android:id/delivery_customer_name",
+        "xpath": "//android.widget.TextView[@resource-id=\"com.walmart.android:id/delivery_customer_name\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/delivery_customer_name\")"
+    },
+    "view_all_orders_button":{
+        "resource_id": "com.walmart.android:id/order_tracker_carousel_view_all_button",
+        "xpath": "//android.widget.Button[@content-desc=\"View all orders for Purchase history\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/order_tracker_carousel_view_all_button\")"
+    },
+    "purchase_history_recycler":{
+        "resource_id": "com.walmart.android:id/purchasehistory_orders_recycler_view",
+        "xpath": "//androidx.recyclerview.widget.RecyclerView[@resource-id=\"com.walmart.android:id/purchasehistory_orders_recycler_view\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/purchasehistory_orders_recycler_view\")"
+    },
+    "purchase_history_order_card":{
+        "resource_id": "com.walmart.android:id/purchasehistory_orderStatus_tracker",
+        "xpath": "//android.view.ViewGroup[@resource-id=\"com.walmart.android:id/purchasehistory_orderStatus_tracker\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/purchasehistory_orderStatus_tracker\")"
+    },
+    "purchase_history_order_card_content":{
+        "resource_id": "com.walmart.android:id/card_content",
+        "xpath": "//android.widget.LinearLayout[@resource-id=\"com.walmart.android:id/card_content\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/card_content\")"
+    },
+    "purchase_history_order_parent_container":{
+        "resource_id": "com.walmart.android:id/parentContainer",
+        "xpath": "//android.view.ViewGroup[@resource-id=\"com.walmart.android:id/parentContainer\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/parentContainer\")"
+    },
+    "payment_method_card":{
+        "resource_id": "com.walmart.android:id/payments_info_container",
+        "xpath": "//androidx.cardview.widget.CardView[@resource-id=\"com.walmart.android:id/payments_info_container\"]/android.view.ViewGroup",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/payments_info_container\")"
     }
 }

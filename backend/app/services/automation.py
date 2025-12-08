@@ -1,9 +1,32 @@
 """Mobile automation service for interacting with Walmart app."""
+import re
 import subprocess
 import time
 from typing import List, Optional
+
 from app.config import settings
 from app.utils.selectors import selectors
+
+# Conditional imports for Selenium and Appium
+try:
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.common.keys import Keys
+    from selenium.webdriver.support import expected_conditions as EC
+    from selenium.webdriver.support.ui import WebDriverWait
+    SELENIUM_AVAILABLE = True
+except ImportError:
+    SELENIUM_AVAILABLE = False
+    # Create dummy classes to avoid NameError
+    class By:
+        ID = "id"
+        XPATH = "xpath"
+        ANDROID_UIAUTOMATOR = "android_uiautomator"
+    class Keys:
+        pass
+    class EC:
+        pass
+    class WebDriverWait:
+        pass
 
 try:
     from appium import webdriver
@@ -11,13 +34,15 @@ try:
     APPIUM_AVAILABLE = True
 except ImportError:
     APPIUM_AVAILABLE = False
+    webdriver = None
+    UiAutomator2Options = None
 
 
 class AutomationService:
     """Service for automating interactions with the Walmart mobile app."""
     
     def __init__(self):
-        self.driver: Optional[webdriver.Remote] = None
+        self.driver = None  # Will be webdriver.Remote when connected
         self.connected = False
     
     async def connect_device(self) -> dict:
@@ -139,13 +164,14 @@ class AutomationService:
             await self.open_walmart_app()
             time.sleep(2)
             
-            if not APPIUM_AVAILABLE or not self.driver:
-                return {"success": False, "message": "Appium not available"}
+            if not SELENIUM_AVAILABLE:
+                return {"success": False, "message": "Selenium not installed. Please install: pip install selenium"}
             
-            from selenium.webdriver.common.by import By
-            from selenium.webdriver.common.keys import Keys
-            from selenium.webdriver.support.ui import WebDriverWait
-            from selenium.webdriver.support import expected_conditions as EC
+            if not APPIUM_AVAILABLE or not self.driver:
+                if not APPIUM_AVAILABLE:
+                    return {"success": False, "message": "Appium not installed. Please install: pip install Appium-Python-Client"}
+                if not self.driver:
+                    return {"success": False, "message": "Device not connected. Please connect device first via /api/v1/automation/connect"}
             
             wait = WebDriverWait(self.driver, 10)
             
@@ -241,8 +267,6 @@ class AutomationService:
                 # - "milk" (default quantity 1)
                 quantity = 1
                 search_term = item
-                
-                import re
                 
                 # Strategy 1: "3 milk" format (from LLM)
                 match = re.match(r'^(\d+)\s+(.+)$', item.strip())
@@ -368,12 +392,14 @@ class AutomationService:
             Result dictionary
         """
         try:
-            if not APPIUM_AVAILABLE or not self.driver:
-                return {"success": False, "message": "Appium not available"}
+            if not SELENIUM_AVAILABLE:
+                return {"success": False, "message": "Selenium not installed. Please install: pip install selenium"}
             
-            from selenium.webdriver.common.by import By
-            from selenium.webdriver.support.ui import WebDriverWait
-            from selenium.webdriver.support import expected_conditions as EC
+            if not APPIUM_AVAILABLE or not self.driver:
+                if not APPIUM_AVAILABLE:
+                    return {"success": False, "message": "Appium not installed. Please install: pip install Appium-Python-Client"}
+                if not self.driver:
+                    return {"success": False, "message": "Device not connected. Please connect device first via /api/v1/automation/connect"}
             
             # Use shorter wait times for better performance (5 seconds is usually enough)
             wait = WebDriverWait(self.driver, 5)
@@ -630,6 +656,457 @@ class AutomationService:
         
         except Exception as e:
             return {"success": False, "message": f"Failed to add to cart: {str(e)}"}
+    
+    async def reorder_last_order(self) -> dict:
+        """
+        Reorder items from the last order in Walmart app for a specific customer.
+        Uses "View all" button to access purchase history, then loops through orders
+        skipping invalid ones (still arriving or missing customer name).
+        
+        Returns:
+            Result dictionary
+        """
+        try:
+            if not SELENIUM_AVAILABLE:
+                return {"success": False, "message": "Selenium not installed. Please install: pip install selenium"}
+            
+            if not APPIUM_AVAILABLE:
+                return {"success": False, "message": "Appium not installed. Please install: pip install Appium-Python-Client"}
+            
+            # Auto-connect if not connected
+            if not self.connected:
+                await self.connect_device()
+            
+            if not self.driver:
+                return {"success": False, "message": "Device not connected. Please connect device first via /api/v1/automation/connect"}
+            
+            # Check if customer name is configured
+            if not settings.customer_name:
+                return {"success": False, "message": "Customer name not configured. Please set CUSTOMER_NAME in environment variables."}
+            
+            # Make sure Walmart app is open
+            await self.open_walmart_app()
+            time.sleep(2)
+            
+            wait = WebDriverWait(self.driver, 10)
+            
+            # Step 1: Navigate to Account tab (bottom navigation)
+            try:
+                account_button_id = selectors.get("account_button", {}).get("resource_id", "")
+                if account_button_id:
+                    account_tab = wait.until(
+                        EC.element_to_be_clickable((By.ID, account_button_id))
+                    )
+                    account_tab.click()
+                    time.sleep(2)  # Wait for account page to load
+                else:
+                    return {"success": False, "message": "Account button selector not configured"}
+            except Exception as e:
+                return {"success": False, "message": f"Failed to navigate to Account: {str(e)}"}
+            
+            # Step 2: Click "View all" button to open purchase history
+            try:
+                view_all_button_id = selectors.get("view_all_orders_button", {}).get("resource_id", "")
+                view_all_button_xpath = selectors.get("view_all_orders_button", {}).get("xpath", "")
+                
+                view_all_button = None
+                if view_all_button_id:
+                    try:
+                        view_all_button = wait.until(
+                            EC.element_to_be_clickable((By.ID, view_all_button_id))
+                        )
+                    except:
+                        pass
+                
+                if not view_all_button and view_all_button_xpath:
+                    try:
+                        view_all_button = wait.until(
+                            EC.element_to_be_clickable((By.XPATH, view_all_button_xpath))
+                        )
+                    except:
+                        pass
+                
+                if not view_all_button:
+                    return {"success": False, "message": "Could not find 'View all' button"}
+                
+                view_all_button.click()
+                time.sleep(2)  # Wait for purchase history page to load
+            except Exception as e:
+                return {"success": False, "message": f"Failed to click 'View all' button: {str(e)}"}
+            
+            # Step 3: Loop through order cards until we find a valid match
+            max_attempts = 20  # Maximum number of orders to check
+            attempt = 0
+            checked_card_positions = set()  # Track which card positions we've already checked
+            
+            while attempt < max_attempts:
+                try:
+                    # Step 3a: Find all order cards in the RecyclerView (refetch each time)
+                    order_card_id = selectors.get("purchase_history_order_card", {}).get("resource_id", "")
+                    order_card_xpath = selectors.get("purchase_history_order_card", {}).get("xpath", "")
+                    
+                    # Get all order cards (fresh fetch)
+                    order_cards = []
+                    if order_card_id:
+                        try:
+                            order_cards = self.driver.find_elements(By.ID, order_card_id)
+                        except:
+                            pass
+                    
+                    if not order_cards and order_card_xpath:
+                        try:
+                            order_cards = self.driver.find_elements(By.XPATH, order_card_xpath)
+                        except:
+                            pass
+                    
+                    if not order_cards:
+                        return {"success": False, "message": "Could not find any order cards in purchase history"}
+                    
+                    # Step 3b: Find the first visible card we haven't checked yet
+                    card_found = False
+                    
+                    for card_index, card in enumerate(order_cards):
+                        try:
+                            # Check if card is displayed
+                            if not card.is_displayed():
+                                continue
+                            
+                            # Get card position to track if we've checked it
+                            try:
+                                card_location = card.location
+                                card_position = (card_location['x'], card_location['y'])
+                                
+                                # Skip if we've already checked this position
+                                if card_position in checked_card_positions:
+                                    continue
+                            except:
+                                # If we can't get location, use index as fallback
+                                if card_index in checked_card_positions:
+                                    continue
+                            
+                            # Check parentContainer to see if order is still arriving (BEFORE tapping)
+                            # The content-desc with order status is on parentContainer, not the first ViewGroup
+                            should_skip = False
+                            try:
+                                # Check parentContainer first (this is where the content-desc actually is)
+                                parent_container = card.find_element(
+                                    By.XPATH,
+                                    ".//android.view.ViewGroup[@resource-id='com.walmart.android:id/parentContainer']"
+                                )
+                                content_desc = parent_container.get_attribute("content-desc") or ""
+                                
+                                # Skip if order is still arriving (content-desc contains "Arrives")
+                                if "arrives" in content_desc.lower():
+                                    should_skip = True
+                            except:
+                                # Fallback: try checking the first ViewGroup child if parentContainer not found
+                                try:
+                                    first_viewgroup = card.find_element(
+                                        By.XPATH,
+                                        ".//android.view.ViewGroup[1]"
+                                    )
+                                    content_desc = first_viewgroup.get_attribute("content-desc") or ""
+                                    if "arrives" in content_desc.lower():
+                                        should_skip = True
+                                except:
+                                    pass  # If we can't check, proceed (might be a valid card)
+                            
+                            # If card should be skipped, scroll past it without tapping
+                            if should_skip:
+                                # Mark this card as checked
+                                try:
+                                    checked_card_positions.add(card_position)
+                                except:
+                                    checked_card_positions.add(card_index)
+                                
+                                # Scroll up based on the order card itself (purchasehistory_orderStatus_tracker)
+                                card_location = card.location
+                                card_size = card.size
+                                card_top_y = card_location['y']
+                                
+                                screen_size = self.driver.get_window_size()
+                                # Scroll up to move past this card (swipe down: from 70% to 30%)
+                                self.driver.swipe(
+                                    int(screen_size['width'] / 2),
+                                    int(screen_size['height'] * 0.7),
+                                    int(screen_size['width'] / 2),
+                                    int(screen_size['height'] * 0.3),
+                                    500
+                                )
+                                time.sleep(0.5)
+                                
+                                attempt += 1
+                                card_found = True
+                                continue  # Skip to next card without tapping
+                            
+                            # Mark this card as checked before opening it (only if not skipping)
+                            try:
+                                checked_card_positions.add(card_position)
+                            except:
+                                checked_card_positions.add(card_index)
+                            
+                            # Card is not "arriving", click on image_carousel to open details
+                            try:
+                                image_carousel = card.find_element(
+                                    By.XPATH,
+                                    ".//android.widget.LinearLayout[@resource-id='com.walmart.android:id/image_carousel']"
+                                )
+                                image_carousel.click()
+                                time.sleep(2)  # Wait for order details page to load
+                            except:
+                                # If image_carousel not found, skip this card
+                                attempt += 1
+                                continue
+                            
+                            # Step 3c: Scroll payment method card to bottom of screen so customer name and reorder button are visible
+                            payment_card_xpath = selectors.get("payment_method_card", {}).get("xpath", "")
+                            
+                            payment_card = None
+                            # First, try to find the card - if not visible, scroll down to bring it into view
+                            max_scroll_attempts = 5
+                            scroll_attempt = 0
+                            while scroll_attempt < max_scroll_attempts:
+                                try:
+                                    payment_card = self.driver.find_element(By.XPATH, payment_card_xpath)
+                                    # Check if card is visible on screen
+                                    if payment_card.is_displayed():
+                                        card_location = payment_card.location
+                                        screen_size = self.driver.get_window_size()
+                                        # If card is visible (even partially), break
+                                        if card_location['y'] < screen_size['height']:
+                                            break
+                                except:
+                                    pass
+                                
+                                # Card not visible, scroll down to bring it into view
+                                screen_size = self.driver.get_window_size()
+                                self.driver.swipe(
+                                    int(screen_size['width'] / 2),
+                                    int(screen_size['height'] * 0.7),
+                                    int(screen_size['width'] / 2),
+                                    int(screen_size['height'] * 0.3),
+                                    500
+                                )
+                                time.sleep(0.5)
+                                scroll_attempt += 1
+                            
+                            if payment_card:
+                                try:
+                                    # Now position payment card bottom at the bottom of the screen
+                                    card_location = payment_card.location
+                                    card_size = payment_card.size
+                                    card_bottom_y = card_location['y'] + card_size['height']
+                                    
+                                    screen_size = self.driver.get_window_size()
+                                    target_y = screen_size['height']  # Bottom of screen
+                                    scroll_needed = card_bottom_y - target_y
+                                    
+                                    if abs(scroll_needed) > 10:
+                                        if scroll_needed > 0:
+                                            # Card bottom is below screen bottom, scroll content up (swipe down)
+                                            self.driver.swipe(
+                                                int(screen_size['width'] / 2),
+                                                int(screen_size['height'] * 0.7),
+                                                int(screen_size['width'] / 2),
+                                                int(screen_size['height'] * 0.7 - scroll_needed),
+                                                500
+                                            )
+                                        else:
+                                            # Card bottom is above screen bottom, scroll content down (swipe up)
+                                            self.driver.swipe(
+                                                int(screen_size['width'] / 2),
+                                                int(screen_size['height'] * 0.3),
+                                                int(screen_size['width'] / 2),
+                                                int(screen_size['height'] * 0.3 - scroll_needed),
+                                                500
+                                            )
+                                        time.sleep(0.5)
+                                except:
+                                    pass  # If we can't position it, continue anyway
+                            
+                            # Step 3d: Check if customer name exists and matches
+                            customer_name_id = selectors.get("order_details_customer_name", {}).get("resource_id", "")
+                            customer_name_xpath = selectors.get("order_details_customer_name", {}).get("xpath", "")
+                            
+                            customer_name_element = None
+                            if customer_name_id:
+                                try:
+                                    customer_name_element = wait.until(
+                                        EC.presence_of_element_located((By.ID, customer_name_id))
+                                    )
+                                except:
+                                    pass
+                            
+                            if not customer_name_element and customer_name_xpath:
+                                try:
+                                    customer_name_element = wait.until(
+                                        EC.presence_of_element_located((By.XPATH, customer_name_xpath))
+                                    )
+                                except:
+                                    pass
+                            
+                            # If customer name element doesn't exist, go back, scroll card to top, and try next
+                            if not customer_name_element:
+                                self.driver.back()
+                                time.sleep(1.5)
+                                
+                                # Scroll current card close to top of screen
+                                try:
+                                    # Refetch card after going back to get current position
+                                    order_cards_after_back = self.driver.find_elements(By.ID, order_card_id) if order_card_id else []
+                                    if not order_cards_after_back:
+                                        order_cards_after_back = self.driver.find_elements(By.XPATH, order_card_xpath) if order_card_xpath else []
+                                    
+                                    if order_cards_after_back and card_index < len(order_cards_after_back):
+                                        current_card = order_cards_after_back[card_index]
+                                        card_location = current_card.location
+                                        card_top_y = card_location['y']
+                                        screen_size = self.driver.get_window_size()
+                                        target_top_y = int(screen_size['height'] * 0.1)  # 10% from top
+                                        scroll_needed = card_top_y - target_top_y
+                                        
+                                        if abs(scroll_needed) > 10:
+                                            if scroll_needed > 0:
+                                                # Card is below target, scroll content up (swipe down: from 70% to 30%)
+                                                self.driver.swipe(
+                                                    int(screen_size['width'] / 2),
+                                                    int(screen_size['height'] * 0.7),
+                                                    int(screen_size['width'] / 2),
+                                                    int(screen_size['height'] * 0.3),
+                                                    500
+                                                )
+                                            else:
+                                                # Card is above target, scroll content down (swipe up: from 30% to 70%)
+                                                self.driver.swipe(
+                                                    int(screen_size['width'] / 2),
+                                                    int(screen_size['height'] * 0.3),
+                                                    int(screen_size['width'] / 2),
+                                                    int(screen_size['height'] * 0.7),
+                                                    500
+                                                )
+                                            time.sleep(0.5)
+                                except:
+                                    pass
+                                
+                                attempt += 1
+                                card_found = True
+                                break  # Break to refetch cards and click next card's image_carousel
+                            
+                            # Get customer name text
+                            order_customer_name = customer_name_element.text.strip()
+                            
+                            # Step 3e: Compare with configured customer name (case-insensitive)
+                            if order_customer_name.lower() == settings.customer_name.lower():
+                                # Name matches! order_details_card is already scrolled to 50% (done above)
+                                # Find and click reorder button
+                                reorder_button_id = selectors.get("reorder_all_items_button", {}).get("resource_id", "")
+                                reorder_button_xpath = selectors.get("reorder_all_items_button", {}).get("xpath", "")
+                                
+                                reorder_button = None
+                                if reorder_button_id:
+                                    try:
+                                        reorder_button = wait.until(
+                                            EC.element_to_be_clickable((By.ID, reorder_button_id))
+                                        )
+                                    except:
+                                        pass
+                                
+                                if not reorder_button and reorder_button_xpath:
+                                    try:
+                                        reorder_button = wait.until(
+                                            EC.element_to_be_clickable((By.XPATH, reorder_button_xpath))
+                                        )
+                                    except:
+                                        pass
+                                
+                                if not reorder_button:
+                                    return {"success": False, "message": "Could not find reorder button"}
+                                
+                                # Click the button
+                                reorder_button.click()
+                                time.sleep(2)  # Wait for items to be added to cart
+                                return {
+                                    "success": True,
+                                    "message": f"Successfully reordered order for {order_customer_name}",
+                                    "customer_name": order_customer_name
+                                }
+                            else:
+                                # Name doesn't match, go back, scroll card to top, and try next
+                                self.driver.back()
+                                time.sleep(1.5)
+                                
+                                # Scroll current card close to top of screen
+                                try:
+                                    # Refetch card after going back to get current position
+                                    order_cards_after_back = self.driver.find_elements(By.ID, order_card_id) if order_card_id else []
+                                    if not order_cards_after_back:
+                                        order_cards_after_back = self.driver.find_elements(By.XPATH, order_card_xpath) if order_card_xpath else []
+                                    
+                                    if order_cards_after_back and card_index < len(order_cards_after_back):
+                                        current_card = order_cards_after_back[card_index]
+                                        card_location = current_card.location
+                                        card_top_y = card_location['y']
+                                        screen_size = self.driver.get_window_size()
+                                        target_top_y = int(screen_size['height'] * 0.1)  # 10% from top
+                                        scroll_needed = card_top_y - target_top_y
+                                        
+                                        if abs(scroll_needed) > 10:
+                                            if scroll_needed > 0:
+                                                # Card is below target, scroll content up (swipe down: from 70% to 30%)
+                                                self.driver.swipe(
+                                                    int(screen_size['width'] / 2),
+                                                    int(screen_size['height'] * 0.7),
+                                                    int(screen_size['width'] / 2),
+                                                    int(screen_size['height'] * 0.3),
+                                                    500
+                                                )
+                                            else:
+                                                # Card is above target, scroll content down (swipe up: from 30% to 70%)
+                                                self.driver.swipe(
+                                                    int(screen_size['width'] / 2),
+                                                    int(screen_size['height'] * 0.3),
+                                                    int(screen_size['width'] / 2),
+                                                    int(screen_size['height'] * 0.7),
+                                                    500
+                                                )
+                                            time.sleep(0.5)
+                                except:
+                                    pass
+                                
+                                attempt += 1
+                                card_found = True
+                                break  # Break to refetch cards and click next card's image_carousel
+                        
+                        except Exception as e:
+                            # Error processing this card, go back if we're on details page, then continue
+                            try:
+                                self.driver.back()
+                                time.sleep(1)
+                            except:
+                                pass
+                            attempt += 1
+                            continue
+                    
+                    # If no card was found/processed, scroll down to load more
+                    if not card_found:
+                        screen_size = self.driver.get_window_size()
+                        self.driver.swipe(
+                            int(screen_size['width'] / 2),
+                            int(screen_size['height'] * 0.7),
+                            int(screen_size['width'] / 2),
+                            int(screen_size['height'] * 0.3),
+                            500
+                        )
+                        time.sleep(1)
+                        attempt += 1
+                
+                except Exception as e:
+                    return {"success": False, "message": f"Error checking orders: {str(e)}"}
+            
+            return {"success": False, "message": f"Could not find matching order for customer '{settings.customer_name}' after checking {max_attempts} orders"}
+        
+        except Exception as e:
+            return {"success": False, "message": f"Failed to reorder: {str(e)}"}
     
     def disconnect(self):
         """Disconnect from device."""

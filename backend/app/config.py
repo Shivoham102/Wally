@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     walmart_app_package: str = "com.walmart.android"
     walmart_app_activity: str = ".activity.MainActivity"
     
+    # User Configuration
+    customer_name: Optional[str] = "Soham Angal"  # Customer name for order matching
+    
     # AI Configuration
     ai_model: str = "gpt-4-turbo-preview"
     voice_model: str = "whisper-1"

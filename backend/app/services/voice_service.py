@@ -129,22 +129,41 @@ class VoiceService:
             return {"action": "add_items", "items": items_data, "status": result}
         
         elif intent_type == "reorder":
-            order_id = intent.get("order_id")
-            if order_id:
-                from app.services.order_history import OrderHistoryService
-                order_service = OrderHistoryService()
-                result = await order_service.reorder(order_id)
-                return {"action": "reorder", "order_id": order_id, "status": result}
-            else:
-                # Reorder from most recent order
-                from app.services.order_history import OrderHistoryService
-                order_service = OrderHistoryService()
-                orders = await order_service.get_order_history(limit=1)
-                if orders:
-                    result = await order_service.reorder(orders[0]["id"])
-                    return {"action": "reorder", "order_id": orders[0]["id"], "status": result}
-                else:
-                    return {"action": "reorder", "status": "no_orders_found"}
+            # Reorder from last order in Walmart app
+            result = await self.automation_service.reorder_last_order()
+            return {"action": "reorder", "status": result}
+        
+        elif intent_type == "reorder_with_items":
+            # Reorder from last order, then add extra items
+            items_data = intent.get("items", [])
+            
+            # First, reorder last order
+            reorder_result = await self.automation_service.reorder_last_order()
+            
+            # Then add extra items
+            if items_data and reorder_result.get("success"):
+                items_for_automation = []
+                for item_obj in items_data:
+                    if isinstance(item_obj, dict):
+                        item_name = item_obj.get("item", "")
+                        quantity = item_obj.get("quantity", 1)
+                        items_for_automation.append(f"{quantity} {item_name}")
+                    elif isinstance(item_obj, str):
+                        items_for_automation.append(item_obj)
+                
+                add_result = await self.automation_service.add_items_to_cart(items_for_automation)
+                return {
+                    "action": "reorder_with_items",
+                    "reorder_status": reorder_result,
+                    "extra_items": items_data,
+                    "add_items_status": add_result
+                }
+            
+            return {
+                "action": "reorder_with_items",
+                "reorder_status": reorder_result,
+                "extra_items": items_data
+            }
         
         elif intent_type == "list_items":
             # List items in cart or previous orders

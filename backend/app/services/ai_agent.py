@@ -15,7 +15,8 @@ Your job is to understand user commands and extract structured information.
 User commands can be:
 1. Adding items: "Add milk, eggs, and bread" or "I need 3 milks and 2 eggs"
 2. Reordering: "Add my usual groceries" or "Reorder from last week"
-3. Listing: "What's in my cart?" or "Show my previous orders"
+3. Reordering with extra items: "Reorder my last order and add milk" or "Add my usual groceries plus eggs"
+4. Listing: "What's in my cart?" or "Show my previous orders"
 
 For quantities, users may say:
 - "3 milks" or "three milks" → 3x milk
@@ -24,8 +25,8 @@ For quantities, users may say:
 - Just "milk" → 1x milk (default)
 
 Respond with a JSON object containing:
-- type: One of "add_items", "reorder", "list_items", "unknown"
-- items: List of objects with "item" and "quantity" fields
+- type: One of "add_items", "reorder", "reorder_with_items", "list_items", "unknown"
+- items: List of objects with "item" and "quantity" fields (for add_items or extra items in reorder_with_items)
   - Always include quantity, even if user doesn't specify (default to 1)
   - Format: [{"item": "milk", "quantity": 3}, {"item": "eggs", "quantity": 2}]
 - order_id: Order ID if specified (for reorder)
@@ -34,8 +35,8 @@ Respond with a JSON object containing:
 Example responses:
 {"type": "add_items", "items": [{"item": "milk", "quantity": 1}, {"item": "eggs", "quantity": 1}], "confidence": 0.95}
 {"type": "add_items", "items": [{"item": "milk", "quantity": 3}, {"item": "eggs", "quantity": 2}], "confidence": 0.95}
-{"type": "add_items", "items": [{"item": "eggs", "quantity": 12}, {"item": "gallon milk", "quantity": 2}], "confidence": 0.9}
 {"type": "reorder", "order_id": null, "confidence": 0.9}
+{"type": "reorder_with_items", "items": [{"item": "milk", "quantity": 1}], "confidence": 0.9}
 {"type": "list_items", "confidence": 0.85}
 """
     
@@ -85,8 +86,34 @@ Example responses:
         """
         command_lower = command.lower()
         
-        # Check for reorder keywords
-        if any(keyword in command_lower for keyword in ["reorder", "usual", "last order", "previous order"]):
+        # Check for reorder with extra items keywords
+        reorder_keywords = ["reorder", "usual", "last order", "previous order"]
+        add_keywords = ["add", "plus", "and also", "also add"]
+        
+        has_reorder = any(keyword in command_lower for keyword in reorder_keywords)
+        has_add = any(keyword in command_lower for keyword in add_keywords)
+        
+        if has_reorder and has_add:
+            # Reorder with extra items - try to extract items after "add", "plus", etc.
+            items = []
+            for add_kw in add_keywords:
+                if add_kw in command_lower:
+                    parts = command_lower.split(add_kw)
+                    if len(parts) > 1:
+                        remaining = parts[1].strip()
+                        # Split by commas and "and"
+                        items = [item.strip() for item in remaining.replace("and", ",").split(",")]
+                        items = [item for item in items if item]
+                        break
+            
+            return {
+                "type": "reorder_with_items",
+                "items": items if items else [],
+                "confidence": 0.7
+            }
+        
+        # Check for reorder keywords (without extra items)
+        if has_reorder:
             return {
                 "type": "reorder",
                 "order_id": None,
