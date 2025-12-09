@@ -193,5 +193,53 @@
         "xpath": "",
         "uiselector": "",
         "note": "Button to confirm/reserve the selected date and time - to be configured."
+    },
+    "home_page_address_accordion":{
+        "resource_id": "com.walmart.android:id/global_intent_center_collapsed_view",
+        "xpath": "//android.view.ViewGroup[@resource-id=\"com.walmart.android:id/global_intent_center_collapsed_view\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/global_intent_center_collapsed_view\")",
+        "note": "Collapsed address accordion on home page - click to expand"
+    },
+    "home_page_delivery_option":{
+        "resource_id": "com.walmart.android:id/global_intent_center_expanded_item_delivery",
+        "xpath": "//android.widget.RelativeLayout[@resource-id=\"com.walmart.android:id/global_intent_center_expanded_item_delivery\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/global_intent_center_expanded_item_delivery\")",
+        "note": "Delivery option button in expanded address accordion - to be configured"
+    },
+    "home_page_expanded_address_card":{
+        "resource_id": "com.walmart.android:id/global_intent_center_expanded_large_card_top",
+        "xpath": "//android.view.ViewGroup[@resource-id=\"com.walmart.android:id/global_intent_center_expanded_large_card_top\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/global_intent_center_expanded_large_card_top\")",
+        "note": "Expanded address card on home page - contains the displayed address"
+    },
+    "home_page_collapsed_address_text":{
+        "resource_id": "com.walmart.android:id/global_intent_center_collapsed_location",
+        "xpath": "//android.widget.TextView[@resource-id=\"com.walmart.android:id/global_intent_center_collapsed_location\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/global_intent_center_collapsed_location\")",
+        "note": "Address text shown in collapsed accordion on home page"
+    },
+    "home_page_expanded_address_text":{
+        "resource_id": "com.walmart.android:id/global_intent_center_large_card_subtitle",
+        "xpath": "//android.widget.TextView[@resource-id=\"com.walmart.android:id/global_intent_center_large_card_subtitle\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/global_intent_center_large_card_subtitle\")",
+        "note": "Address TextView in expanded accordion - shows full address like '119 W Oakland Ave, Columbus, OH, 43201'"
+        },
+    "home_page_address_recycler_view":{
+        "resource_id": "com.walmart.android:id/select_address_recycler_view",
+        "xpath": "//androidx.recyclerview.widget.RecyclerView[@resource-id=\"com.walmart.android:id/select_address_recycler_view\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/select_address_recycler_view\")",
+        "note": "RecyclerView containing address list when selecting address from home page - different from cart_view address selection. To be configured based on actual UI dump."
+    },
+    "home_page_address_name_radio_button":{
+        "resource_id": "com.walmart.android:id/choose_address_radio_button",
+        "xpath": "//android.widget.RadioButton[@resource-id=\"com.walmart.android:id/choose_address_radio_button\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/choose_address_radio_button\")",
+        "note": "Radio button for customer name in home page address selection - uses same resource_id as cart_view, but accessed via home_page_address_recycler_view"
+    },
+    "home_page_save_address_button":{
+        "resource_id": "com.walmart.android:id/select_address_continue_button",
+        "xpath": "//android.widget.Button[@resource-id=\"com.walmart.android:id/select_address_continue_button\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/select_address_continue_button\")",
+        "note": "Button to save/confirm address selection from home page - different from cart_view. To be configured based on actual UI dump."
     }
 }

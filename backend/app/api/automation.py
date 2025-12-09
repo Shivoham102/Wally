@@ -42,12 +42,38 @@ async def get_automation_status():
 
 @router.post("/open-walmart")
 async def open_walmart_app():
-    """Open Walmart app on connected device."""
+    """Open Walmart app on connected device and set address/delivery."""
     try:
         result = await automation_service.open_walmart_app()
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to open Walmart app: {str(e)}")
+
+
+@router.post("/set-address-delivery")
+async def set_address_and_delivery():
+    """
+    Set address and delivery option on home page.
+    This should be called early as product listings change based on address.
+    
+    Steps:
+    1. Open address accordion (click collapsed view)
+    2. Click on delivery option
+    3. Check if address matches stored address
+    4. If not, select correct address using customer name matching
+    
+    Example request:
+    POST /api/v1/automation/set-address-delivery
+    """
+    try:
+        result = await automation_service.set_address_and_delivery()
+        return {
+            "intent": "set_address_delivery",
+            "result": result,
+            "note": "Sets address and delivery option on home page"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to set address and delivery: {str(e)}")
 
 
 @router.post("/add-to-cart")

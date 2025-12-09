@@ -140,7 +140,24 @@ class AutomationService:
                     "-n", f"{settings.walmart_app_package}/{settings.walmart_app_activity}"
                 ])
             
-            return {"success": True, "message": "Walmart app opened"}
+            time.sleep(2)  # Wait for app to load
+            
+            # Set address and delivery option early (product listings change based on address)
+            address_result = await self.set_address_and_delivery()
+            if not address_result.get("success"):
+                # Log warning but don't fail - app is still open
+                return {
+                    "success": True,
+                    "message": "Walmart app opened",
+                    "address_set": False,
+                    "address_warning": address_result.get("message", "Could not set address")
+                }
+            
+            return {
+                "success": True,
+                "message": "Walmart app opened",
+                "address_set": True
+            }
         
         except Exception as e:
             return {"success": False, "message": f"Failed to open app: {str(e)}"}
@@ -1150,6 +1167,262 @@ class AutomationService:
         
         except Exception as e:
             return {"success": False, "message": f"Failed to reorder: {str(e)}"}
+    
+    async def set_address_and_delivery(self) -> dict:
+        """
+        Set address and delivery option on home page.
+        This should be called early as product listings change based on address.
+        
+        Steps:
+        1. Open address accordion (click collapsed view)
+        2. Click on delivery option
+        3. Check if address in global_intent_center_expanded_large_card_top matches stored address
+        4. If not, click on it and do scrolling/finding process with matching names
+        
+        Returns:
+            Result dictionary
+        """
+        try:
+            if not SELENIUM_AVAILABLE:
+                return {"success": False, "message": "Selenium not installed. Please install: pip install selenium"}
+            
+            if not APPIUM_AVAILABLE or not self.driver:
+                if not APPIUM_AVAILABLE:
+                    return {"success": False, "message": "Appium not installed. Please install: pip install Appium-Python-Client"}
+                if not self.driver:
+                    return {"success": False, "message": "Device not connected. Please connect device first via /api/v1/automation/connect"}
+            
+            wait = WebDriverWait(self.driver, 10)
+            
+            # Helper to find element using multiple strategies
+            def find_element_by_selector(uiselector: str = "", xpath: str = "", resource_id: str = "", by_type: str = "clickable"):
+                """Find element using UiSelector first, then fallback to XPath or resource_id."""
+                try:
+                    if uiselector:
+                        if by_type == "clickable":
+                            return wait.until(EC.element_to_be_clickable((By.ANDROID_UIAUTOMATOR, uiselector)))
+                        else:
+                            return wait.until(EC.presence_of_element_located((By.ANDROID_UIAUTOMATOR, uiselector)))
+                except:
+                    pass
+                
+                if xpath:
+                    try:
+                        if by_type == "clickable":
+                            return wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
+                        else:
+                            return wait.until(EC.presence_of_element_located((By.XPATH, xpath)))
+                    except:
+                        pass
+                
+                if resource_id:
+                    try:
+                        if by_type == "clickable":
+                            return wait.until(EC.element_to_be_clickable((By.ID, resource_id)))
+                        else:
+                            return wait.until(EC.presence_of_element_located((By.ID, resource_id)))
+                    except:
+                        pass
+                
+                raise Exception(f"Element not found with UiSelector, XPath, or resource_id")
+            
+            # Step 1: Check if address is already correct in collapsed view
+            if settings.customer_address:
+                try:
+                    collapsed_address_id = selectors.get("home_page_collapsed_address_text", {}).get("resource_id", "")
+                    collapsed_address_xpath = selectors.get("home_page_collapsed_address_text", {}).get("xpath", "")
+                    collapsed_address_uiselector = selectors.get("home_page_collapsed_address_text", {}).get("uiselector", "")
+                    
+                    collapsed_address_element = find_element_by_selector(
+                        uiselector=collapsed_address_uiselector,
+                        xpath=collapsed_address_xpath,
+                        resource_id=collapsed_address_id,
+                        by_type="presence"
+                    )
+                    
+                    displayed_address = collapsed_address_element.text.strip() if collapsed_address_element.text else ""
+                    if displayed_address and settings.customer_address.lower() in displayed_address.lower():
+                        # Address already matches, no need to change
+                        return {"success": True, "message": f"Address already set to {displayed_address}"}
+                except:
+                    # If we can't check collapsed view, continue with the flow
+                    pass
+            
+            # Step 2: Open address accordion (click collapsed view)
+            try:
+                accordion_id = selectors.get("home_page_address_accordion", {}).get("resource_id", "")
+                accordion_xpath = selectors.get("home_page_address_accordion", {}).get("xpath", "")
+                accordion_uiselector = selectors.get("home_page_address_accordion", {}).get("uiselector", "")
+                
+                accordion = find_element_by_selector(
+                    uiselector=accordion_uiselector,
+                    xpath=accordion_xpath,
+                    resource_id=accordion_id
+                )
+                accordion.click()
+                time.sleep(2)  # Wait for accordion to expand
+            except Exception as e:
+                return {"success": False, "message": f"Step 2 failed - Could not open address accordion: {str(e)}"}
+            
+            # Step 3: Click on delivery option
+            try:
+                delivery_option_config = selectors.get("home_page_delivery_option", {})
+                delivery_option_id = delivery_option_config.get("resource_id", "")
+                delivery_option_xpath = delivery_option_config.get("xpath", "")
+                delivery_option_uiselector = delivery_option_config.get("uiselector", "")
+                
+                if not delivery_option_id and not delivery_option_xpath and not delivery_option_uiselector:
+                    return {"success": False, "message": "Delivery option selector not configured"}
+                
+                delivery_option = find_element_by_selector(
+                    uiselector=delivery_option_uiselector,
+                    xpath=delivery_option_xpath,
+                    resource_id=delivery_option_id
+                )
+                delivery_option.click()
+                time.sleep(2)  # Wait for delivery option to be selected
+            except Exception as e:
+                return {"success": False, "message": f"Step 3 failed - Could not click delivery option: {str(e)}"}
+            
+            # Step 4: Check if address TextView in expanded view matches stored address
+            # Only proceed to change address if it doesn't match
+            if settings.customer_address:
+                try:
+                    expanded_address_id = selectors.get("home_page_expanded_address_text", {}).get("resource_id", "")
+                    expanded_address_xpath = selectors.get("home_page_expanded_address_text", {}).get("xpath", "")
+                    expanded_address_uiselector = selectors.get("home_page_expanded_address_text", {}).get("uiselector", "")
+                    
+                    if expanded_address_id or expanded_address_xpath or expanded_address_uiselector:
+                        expanded_address_element = find_element_by_selector(
+                            uiselector=expanded_address_uiselector,
+                            xpath=expanded_address_xpath,
+                            resource_id=expanded_address_id,
+                            by_type="presence"
+                        )
+                        
+                        displayed_address = expanded_address_element.text.strip() if expanded_address_element.text else ""
+                        if displayed_address and settings.customer_address.lower() in displayed_address.lower():
+                            # Address matches, no need to change
+                            return {"success": True, "message": f"Address already matches stored address: {displayed_address}"}
+                        
+                        # Address doesn't match, click on the address TextView to change it
+                        # The TextView itself is clickable and navigates to address selection
+                        # We already have the element, so just click it directly - no need to lookup the card container
+                        expanded_address_element.click()
+                        time.sleep(2)  # Wait for address selection screen to open
+                except Exception as e:
+                    return {"success": False, "message": f"Step 4 failed - Could not check or click address card: {str(e)}"}
+            else:
+                # No customer_address configured, skip address checking
+                return {"success": True, "message": "Delivery option set, but no address configured for matching"}
+            
+            # Step 5: Select address using home page address selection flow
+            # When clicking address card from home page, it goes directly to address selection screen
+            try:
+                # Find and select address matching customer name using home_page selectors
+                address_recycler_id = selectors.get("home_page_address_recycler_view", {}).get("resource_id", "")
+                address_recycler_xpath = selectors.get("home_page_address_recycler_view", {}).get("xpath", "")
+                address_recycler_uiselector = selectors.get("home_page_address_recycler_view", {}).get("uiselector", "")
+                
+                if not address_recycler_id and not address_recycler_xpath and not address_recycler_uiselector:
+                    return {"success": False, "message": "Home page address RecyclerView selector not configured"}
+                
+                address_recycler = find_element_by_selector(
+                    uiselector=address_recycler_uiselector,
+                    xpath=address_recycler_xpath,
+                    resource_id=address_recycler_id,
+                    by_type="presence"
+                )
+                
+                # Use home_page selector for radio buttons
+                address_radio_button_id = selectors.get("home_page_address_name_radio_button", {}).get("resource_id", "")
+                
+                if not address_radio_button_id:
+                    return {"success": False, "message": "Home page address radio button resource ID not configured"}
+                
+                target_username = settings.customer_name.strip().lower()
+                checked_radio_buttons = set()
+                max_scroll_attempts = 20
+                scroll_attempt = 0
+                address_found = False
+                
+                while scroll_attempt < max_scroll_attempts and not address_found:
+                    all_radio_buttons = address_recycler.find_elements(By.ID, address_radio_button_id)
+                    
+                    if not all_radio_buttons:
+                        if scroll_attempt == 0:
+                            return {"success": False, "message": "No address radio buttons found in RecyclerView"}
+                        break
+                    
+                    for radio_button in all_radio_buttons:
+                        try:
+                            try:
+                                location = radio_button.location
+                                size = radio_button.size
+                                button_id = f"{location['x']}_{location['y']}_{location['x'] + size['width']}_{location['y'] + size['height']}"
+                                
+                                if button_id in checked_radio_buttons:
+                                    continue
+                                
+                                checked_radio_buttons.add(button_id)
+                            except:
+                                radio_text = radio_button.text.strip() if radio_button.text else ""
+                                if radio_text in checked_radio_buttons:
+                                    continue
+                                checked_radio_buttons.add(radio_text)
+                            
+                            radio_text = radio_button.text.strip() if radio_button.text else ""
+                            
+                            if radio_text:
+                                radio_text_lower = radio_text.lower()
+                                if target_username == radio_text_lower:
+                                    radio_button.click()
+                                    address_found = True
+                                    time.sleep(1)
+                                    break
+                        except Exception as e:
+                            continue
+                    
+                    if not address_found:
+                        try:
+                            recycler_location = address_recycler.location
+                            recycler_size = address_recycler.size
+                            screen_size = self.driver.get_window_size()
+                            
+                            start_x = recycler_location['x'] + int(recycler_size['width'] / 2)
+                            start_y = recycler_location['y'] + int(recycler_size['height'] * 0.7)
+                            end_x = start_x
+                            end_y = recycler_location['y'] + int(recycler_size['height'] * 0.3)
+                            
+                            self.driver.swipe(start_x, start_y, end_x, end_y, 500)
+                            time.sleep(0.8)
+                            scroll_attempt += 1
+                        except Exception as e:
+                            break
+                
+                if not address_found:
+                    return {"success": False, "message": f"Could not find address with username matching '{settings.customer_name}' after scrolling through {scroll_attempt} times"}
+                
+                # Click save button using home_page selector
+                save_address_button_id = selectors.get("home_page_save_address_button", {}).get("resource_id", "")
+                save_address_button_xpath = selectors.get("home_page_save_address_button", {}).get("xpath", "")
+                save_address_button_uiselector = selectors.get("home_page_save_address_button", {}).get("uiselector", "")
+                
+                save_address_button = find_element_by_selector(
+                    uiselector=save_address_button_uiselector,
+                    xpath=save_address_button_xpath,
+                    resource_id=save_address_button_id
+                )
+                save_address_button.click()
+                time.sleep(2)  # Wait for address to be saved
+                
+            except Exception as e:
+                return {"success": False, "message": f"Failed to select address: {str(e)}"}
+            
+            return {"success": True, "message": f"Successfully set address for {settings.customer_name}"}
+        
+        except Exception as e:
+            return {"success": False, "message": f"Failed to set address and delivery: {str(e)}"}
     
     async def place_order(self, date_preference: Optional[str] = None, time_preference: Optional[str] = None) -> dict:
         """

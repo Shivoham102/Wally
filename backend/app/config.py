@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     
     # User Configuration
     customer_name: Optional[str] = "Soham Angal"  # Customer name for order matching
+    customer_address: Optional[str] = "119 W Oakland Ave, Columbus, OH 43201" # Customer address for matching (e.g., "119 W Oakland Ave, Columbus, OH 43201")
     
     # AI Configuration
     ai_model: str = "gpt-4-turbo-preview"
