@@ -187,6 +187,22 @@ class VoiceService:
                 "message": "Reorder completed, but no extra items to add" if not items_data else "Reorder failed, skipping extra items"
             }
         
+        elif intent_type == "place_order":
+            # Place order with optional date and time preferences
+            date_pref = intent.get("date_preference")
+            time_pref = intent.get("time_preference")
+            
+            result = await self.automation_service.place_order(
+                date_preference=date_pref,
+                time_preference=time_pref
+            )
+            return {
+                "action": "place_order",
+                "date_preference": date_pref,
+                "time_preference": time_pref,
+                "status": result
+            }
+        
         elif intent_type == "list_items":
             # List items in cart or previous orders
             return {"action": "list_items", "message": "Feature coming soon"}

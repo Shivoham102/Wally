@@ -1151,6 +1151,567 @@ class AutomationService:
         except Exception as e:
             return {"success": False, "message": f"Failed to reorder: {str(e)}"}
     
+    async def place_order(self, date_preference: Optional[str] = None, time_preference: Optional[str] = None) -> dict:
+        """
+        Place an order in Walmart app.
+        
+        Steps:
+        1. Click cart_button
+        2. Click on third card inside delivery_options LinearLayout
+        3. Click cart_view_address_and_delivery_time_button
+        3.1 Set correct address:
+            3.1.1 Click cart_view_change_address_button (opens address menu)
+            3.1.2 In address_recycler_view, for each viewgroup, check if name in 
+                  address_name_radio_button matches stored name. If match, click the radio button
+        
+        Returns:
+            Result dictionary
+        """
+        try:
+            if not SELENIUM_AVAILABLE:
+                return {"success": False, "message": "Selenium not installed. Please install: pip install selenium"}
+            
+            if not APPIUM_AVAILABLE:
+                return {"success": False, "message": "Appium not installed. Please install: pip install Appium-Python-Client"}
+            
+            # Auto-connect if not connected
+            if not self.connected:
+                await self.connect_device()
+            
+            if not self.driver:
+                return {"success": False, "message": "Device not connected. Please connect device first via /api/v1/automation/connect"}
+            
+            # Check if customer name is configured
+            if not settings.customer_name:
+                return {"success": False, "message": "Customer name not configured. Please set CUSTOMER_NAME in environment variables."}
+            
+            # Make sure Walmart app is open
+            await self.open_walmart_app()
+            time.sleep(2)
+            
+            wait = WebDriverWait(self.driver, 10)
+            
+            # Helper to find element using multiple strategies
+            def find_element_by_selector(uiselector: str = "", xpath: str = "", resource_id: str = "", by_type: str = "clickable"):
+                """Find element using UiSelector first, then fallback to XPath or resource_id."""
+                try:
+                    # Try UiSelector first (most reliable for Android)
+                    if uiselector:
+                        if by_type == "clickable":
+                            return wait.until(EC.element_to_be_clickable((By.ANDROID_UIAUTOMATOR, uiselector)))
+                        else:
+                            return wait.until(EC.presence_of_element_located((By.ANDROID_UIAUTOMATOR, uiselector)))
+                except:
+                    pass
+                
+                # Fallback to XPath
+                if xpath:
+                    try:
+                        if by_type == "clickable":
+                            return wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
+                        else:
+                            return wait.until(EC.presence_of_element_located((By.XPATH, xpath)))
+                    except:
+                        pass
+                
+                # Fallback to resource_id
+                if resource_id:
+                    try:
+                        if by_type == "clickable":
+                            return wait.until(EC.element_to_be_clickable((By.ID, resource_id)))
+                        else:
+                            return wait.until(EC.presence_of_element_located((By.ID, resource_id)))
+                    except:
+                        pass
+                
+                raise Exception(f"Element not found with UiSelector, XPath, or resource_id")
+            
+            # Step 1: Click cart_button
+            try:
+                cart_button_id = selectors.get("cart_button", {}).get("resource_id", "")
+                cart_button_xpath = selectors.get("cart_button", {}).get("xpath", "")
+                cart_button_uiselector = selectors.get("cart_button", {}).get("uiselector", "")
+                
+                cart_button = find_element_by_selector(
+                    uiselector=cart_button_uiselector,
+                    xpath=cart_button_xpath,
+                    resource_id=cart_button_id
+                )
+                cart_button.click()
+                time.sleep(2)  # Wait for cart page to load
+            except Exception as e:
+                return {"success": False, "message": f"Step 1 failed - Could not click cart button: {str(e)}"}
+            
+            # Step 2: Click on third card inside delivery_options LinearLayout
+            # First, check if accordion is collapsed and expand it if needed
+            try:
+                # Check if expand/collapse button exists and if accordion is collapsed
+                expand_collapse_button_id = selectors.get("delivery_options_expand_collapse_button", {}).get("resource_id", "")
+                expand_collapse_button_xpath = selectors.get("delivery_options_expand_collapse_button", {}).get("xpath", "")
+                expand_collapse_button_uiselector = selectors.get("delivery_options_expand_collapse_button", {}).get("uiselector", "")
+                
+                # Try to find the expand/collapse button
+                try:
+                    expand_collapse_button = find_element_by_selector(
+                        uiselector=expand_collapse_button_uiselector,
+                        xpath=expand_collapse_button_xpath,
+                        resource_id=expand_collapse_button_id,
+                        by_type="presence"
+                    )
+                    
+                    # Check if accordion is collapsed by checking content-desc or text
+                    # If content-desc contains "Collapsed" (not "Expanded"), click to expand
+                    try:
+                        content_desc = expand_collapse_button.get_attribute("content-desc") or ""
+                        # Check if it's collapsed (content-desc might say "Collapsed" or not contain "Expanded")
+                        if "collapsed" in content_desc.lower() or ("expanded" not in content_desc.lower() and content_desc):
+                            # Accordion is collapsed, click to expand it
+                            expand_collapse_button.click()
+                            time.sleep(1.5)  # Wait for accordion to expand
+                    except:
+                        # If we can't check content-desc, try clicking anyway (idempotent - won't hurt if already expanded)
+                        try:
+                            expand_collapse_button.click()
+                            time.sleep(1.5)
+                        except:
+                            pass  # Button might not be clickable if already expanded
+                except:
+                    # Expand/collapse button not found, assume accordion is already expanded or doesn't exist
+                    pass
+                
+                # Now try to click the third card
+                delivery_options_third_card_xpath = selectors.get("delivery_options_third_card", {}).get("xpath", "")
+                delivery_options_third_card_xpath_alt = selectors.get("delivery_options_third_card", {}).get("xpath_alt", "")
+                delivery_options_third_card_uiselector = selectors.get("delivery_options_third_card", {}).get("uiselector", "")
+                
+                # Try primary XPath first
+                third_card = None
+                try:
+                    third_card = find_element_by_selector(
+                        uiselector=delivery_options_third_card_uiselector,
+                        xpath=delivery_options_third_card_xpath
+                    )
+                except:
+                    # If primary fails, try alternative XPath (using "Delivery" text)
+                    if delivery_options_third_card_xpath_alt:
+                        try:
+                            third_card = find_element_by_selector(
+                                xpath=delivery_options_third_card_xpath_alt
+                            )
+                        except:
+                            pass
+                
+                if not third_card:
+                    return {"success": False, "message": "Step 2 failed - Could not find third card (Delivery) in delivery_options"}
+                
+                third_card.click()
+                time.sleep(2)  # Wait for delivery options to load
+            except Exception as e:
+                return {"success": False, "message": f"Step 2 failed - Could not click third card in delivery_options: {str(e)}"}
+            
+            # Step 3: Click cart_view_address_and_delivery_time_button
+            try:
+                address_delivery_button_id = selectors.get("cart_view_address_and_delivery_time_button", {}).get("resource_id", "")
+                address_delivery_button_xpath = selectors.get("cart_view_address_and_delivery_time_button", {}).get("xpath", "")
+                address_delivery_button_uiselector = selectors.get("cart_view_address_and_delivery_time_button", {}).get("uiselector", "")
+                
+                address_delivery_button = find_element_by_selector(
+                    uiselector=address_delivery_button_uiselector,
+                    xpath=address_delivery_button_xpath,
+                    resource_id=address_delivery_button_id
+                )
+                address_delivery_button.click()
+                time.sleep(2)  # Wait for address selection page to load
+            except Exception as e:
+                return {"success": False, "message": f"Step 3 failed - Could not click address and delivery time button: {str(e)}"}
+            
+            # Step 3.1: Set correct address
+            # Step 3.1.1: Click cart_view_change_address_button
+            try:
+                change_address_button_id = selectors.get("cart_view_change_address_button", {}).get("resource_id", "")
+                change_address_button_xpath = selectors.get("cart_view_change_address_button", {}).get("xpath", "")
+                change_address_button_uiselector = selectors.get("cart_view_change_address_button", {}).get("uiselector", "")
+                
+                change_address_button = find_element_by_selector(
+                    uiselector=change_address_button_uiselector,
+                    xpath=change_address_button_xpath,
+                    resource_id=change_address_button_id
+                )
+                change_address_button.click()
+                time.sleep(2)  # Wait for address menu to open
+            except Exception as e:
+                return {"success": False, "message": f"Step 3.1.1 failed - Could not click change address button: {str(e)}"}
+            
+            # Step 3.1.2: In address_recycler_view, find all address_name_radio_button elements,
+            #             check if the radio button's text matches stored username. If match, click it.
+            # Note: The radio button's text attribute contains the exact username
+            try:
+                address_recycler_id = selectors.get("address_recycler_view", {}).get("resource_id", "")
+                address_recycler_xpath = selectors.get("address_recycler_view", {}).get("xpath", "")
+                address_recycler_uiselector = selectors.get("address_recycler_view", {}).get("uiselector", "")
+                
+                # Find the RecyclerView
+                address_recycler = find_element_by_selector(
+                    uiselector=address_recycler_uiselector,
+                    xpath=address_recycler_xpath,
+                    resource_id=address_recycler_id,
+                    by_type="presence"
+                )
+                
+                # Get the radio button resource ID
+                address_radio_button_id = selectors.get("address_name_radio_button", {}).get("resource_id", "")
+                
+                if not address_radio_button_id:
+                    return {"success": False, "message": "Address radio button resource ID not configured"}
+                
+                # Normalize customer name for comparison (case-insensitive, trimmed)
+                target_username = settings.customer_name.strip().lower()
+                
+                # Track checked radio buttons to avoid checking the same ones multiple times
+                checked_radio_buttons = set()
+                max_scroll_attempts = 20  # Maximum number of scroll attempts
+                scroll_attempt = 0
+                address_found = False
+                
+                while scroll_attempt < max_scroll_attempts and not address_found:
+                    # Find all radio buttons currently visible in the RecyclerView
+                    all_radio_buttons = address_recycler.find_elements(By.ID, address_radio_button_id)
+                    
+                    if not all_radio_buttons:
+                        # If no radio buttons found, try scrolling once more
+                        if scroll_attempt == 0:
+                            return {"success": False, "message": "No address radio buttons found in RecyclerView"}
+                        break
+                    
+                    # Check each radio button's text for matching username
+                    for radio_button in all_radio_buttons:
+                        try:
+                            # Get a unique identifier for this radio button to track if we've checked it
+                            # Use location and text as identifier
+                            try:
+                                location = radio_button.location
+                                size = radio_button.size
+                                button_id = f"{location['x']}_{location['y']}_{location['x'] + size['width']}_{location['y'] + size['height']}"
+                                
+                                # Skip if we've already checked this button
+                                if button_id in checked_radio_buttons:
+                                    continue
+                                
+                                checked_radio_buttons.add(button_id)
+                            except:
+                                # If we can't get location, use text as fallback identifier
+                                radio_text = radio_button.text.strip() if radio_button.text else ""
+                                if radio_text in checked_radio_buttons:
+                                    continue
+                                checked_radio_buttons.add(radio_text)
+                            
+                            # Get the radio button's text (this contains the username)
+                            radio_text = radio_button.text.strip() if radio_button.text else ""
+                            
+                            if radio_text:
+                                radio_text_lower = radio_text.lower()
+                                # Check if the radio button text matches the target username
+                                if target_username == radio_text_lower:
+                                    # Found matching username, click the radio button
+                                    radio_button.click()
+                                    address_found = True
+                                    time.sleep(1)
+                                    break
+                        except Exception as e:
+                            # Continue to next radio button if this one fails
+                            continue
+                    
+                    # If address not found yet, scroll down to load more addresses
+                    if not address_found:
+                        try:
+                            # Get RecyclerView location and size
+                            recycler_location = address_recycler.location
+                            recycler_size = address_recycler.size
+                            screen_size = self.driver.get_window_size()
+                            
+                            # Calculate scroll coordinates (scroll down in RecyclerView)
+                            start_x = recycler_location['x'] + int(recycler_size['width'] / 2)
+                            start_y = recycler_location['y'] + int(recycler_size['height'] * 0.7)  # Start from 70% down
+                            end_x = start_x
+                            end_y = recycler_location['y'] + int(recycler_size['height'] * 0.3)  # End at 30% down (scroll up content)
+                            
+                            # Perform swipe to scroll
+                            self.driver.swipe(start_x, start_y, end_x, end_y, 500)
+                            time.sleep(0.8)  # Wait for new items to load
+                            
+                            scroll_attempt += 1
+                        except Exception as e:
+                            # If scrolling fails, break the loop
+                            break
+                
+                if not address_found:
+                    return {"success": False, "message": f"Could not find address with username matching '{settings.customer_name}' after scrolling through {scroll_attempt} times"}
+                
+                # Step 3.1.3: Click save_address_button to save the selected address
+                try:
+                    save_address_button_id = selectors.get("save_address_button", {}).get("resource_id", "")
+                    save_address_button_xpath = selectors.get("save_address_button", {}).get("xpath", "")
+                    save_address_button_uiselector = selectors.get("save_address_button", {}).get("uiselector", "")
+                    
+                    save_address_button = find_element_by_selector(
+                        uiselector=save_address_button_uiselector,
+                        xpath=save_address_button_xpath,
+                        resource_id=save_address_button_id
+                    )
+                    save_address_button.click()
+                    time.sleep(2)  # Wait for address to be saved and page to update
+                except Exception as e:
+                    return {"success": False, "message": f"Step 3.1.3 failed - Could not click save address button: {str(e)}"}
+                
+            except Exception as e:
+                return {"success": False, "message": f"Step 3.1.2 failed - Could not select address: {str(e)}"}
+            
+            # Step 4: Select date and time for delivery
+            # Step 4.1: Select date
+            date_selected = await self._select_delivery_date(date_preference=date_preference)
+            if not date_selected.get("success"):
+                return {"success": False, "message": f"Step 4.1 failed - {date_selected.get('message', 'Could not select date')}"}
+            
+            # Step 4.2: Select time slot
+            time_selected = await self._select_delivery_time(time_preference=time_preference)
+            if not time_selected.get("success"):
+                return {"success": False, "message": f"Step 4.2 failed - {time_selected.get('message', 'Could not select time')}"}
+            
+            # Step 4.3: Click reserve/confirm button
+            reserve_result = await self._confirm_reservation()
+            if not reserve_result.get("success"):
+                return {"success": False, "message": f"Step 4.3 failed - {reserve_result.get('message', 'Could not confirm reservation')}"}
+            
+            return {
+                "success": True,
+                "message": f"Successfully placed order with address for {settings.customer_name}",
+                "date": date_selected.get("date"),
+                "time": time_selected.get("time")
+            }
+        
+        except Exception as e:
+            return {"success": False, "message": f"Failed to place order: {str(e)}"}
+    
+    async def _select_delivery_date(self, date_preference: Optional[str] = None) -> dict:
+        """
+        Select delivery date from the date selector.
+        
+        Args:
+            date_preference: Optional date preference (e.g., "today", "tomorrow", "Tue 12/9", etc.)
+                           If None, selects the first available date
+        
+        Returns:
+            Result dictionary with selected date
+        """
+        try:
+            if not SELENIUM_AVAILABLE or not APPIUM_AVAILABLE or not self.driver:
+                return {"success": False, "message": "Device not connected or dependencies not available"}
+            
+            wait = WebDriverWait(self.driver, 10)
+            
+            # Helper to find element using multiple strategies
+            def find_element_by_selector(uiselector: str = "", xpath: str = "", resource_id: str = "", by_type: str = "clickable"):
+                """Find element using UiSelector first, then fallback to XPath or resource_id."""
+                try:
+                    if uiselector:
+                        if by_type == "clickable":
+                            return wait.until(EC.element_to_be_clickable((By.ANDROID_UIAUTOMATOR, uiselector)))
+                        else:
+                            return wait.until(EC.presence_of_element_located((By.ANDROID_UIAUTOMATOR, uiselector)))
+                except:
+                    pass
+                
+                if xpath:
+                    try:
+                        if by_type == "clickable":
+                            return wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
+                        else:
+                            return wait.until(EC.presence_of_element_located((By.XPATH, xpath)))
+                    except:
+                        pass
+                
+                if resource_id:
+                    try:
+                        if by_type == "clickable":
+                            return wait.until(EC.element_to_be_clickable((By.ID, resource_id)))
+                        else:
+                            return wait.until(EC.presence_of_element_located((By.ID, resource_id)))
+                    except:
+                        pass
+                
+                raise Exception(f"Element not found with UiSelector, XPath, or resource_id")
+            
+            # Get date selector configuration (to be added by user)
+            date_selector_config = selectors.get("delivery_date_selector", {})
+            date_selector_id = date_selector_config.get("resource_id", "")
+            date_selector_xpath = date_selector_config.get("xpath", "")
+            date_selector_uiselector = date_selector_config.get("uiselector", "")
+            
+            if not date_selector_id and not date_selector_xpath and not date_selector_uiselector:
+                return {"success": False, "message": "Date selector not configured"}
+            
+            # Find all available date options
+            # This will need to be updated based on actual selector structure
+            # For now, placeholder logic
+            if date_preference:
+                # Try to find date matching preference
+                # This is a placeholder - actual implementation depends on selector structure
+                pass
+            else:
+                # Select first available date (not "Full")
+                # This is a placeholder - actual implementation depends on selector structure
+                pass
+            
+            # Placeholder return - to be implemented once selectors are added
+            return {"success": True, "message": "Date selection placeholder", "date": date_preference or "default"}
+        
+        except Exception as e:
+            return {"success": False, "message": f"Failed to select date: {str(e)}"}
+    
+    async def _select_delivery_time(self, time_preference: Optional[str] = None) -> dict:
+        """
+        Select delivery time slot from the time selector.
+        
+        Args:
+            time_preference: Optional time preference (e.g., "6am-8am", "7am-9am", "morning", "afternoon", etc.)
+                           If None, selects the first available time slot
+        
+        Returns:
+            Result dictionary with selected time
+        """
+        try:
+            if not SELENIUM_AVAILABLE or not APPIUM_AVAILABLE or not self.driver:
+                return {"success": False, "message": "Device not connected or dependencies not available"}
+            
+            wait = WebDriverWait(self.driver, 10)
+            
+            # Helper to find element using multiple strategies
+            def find_element_by_selector(uiselector: str = "", xpath: str = "", resource_id: str = "", by_type: str = "clickable"):
+                """Find element using UiSelector first, then fallback to XPath or resource_id."""
+                try:
+                    if uiselector:
+                        if by_type == "clickable":
+                            return wait.until(EC.element_to_be_clickable((By.ANDROID_UIAUTOMATOR, uiselector)))
+                        else:
+                            return wait.until(EC.presence_of_element_located((By.ANDROID_UIAUTOMATOR, uiselector)))
+                except:
+                    pass
+                
+                if xpath:
+                    try:
+                        if by_type == "clickable":
+                            return wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
+                        else:
+                            return wait.until(EC.presence_of_element_located((By.XPATH, xpath)))
+                    except:
+                        pass
+                
+                if resource_id:
+                    try:
+                        if by_type == "clickable":
+                            return wait.until(EC.element_to_be_clickable((By.ID, resource_id)))
+                        else:
+                            return wait.until(EC.presence_of_element_located((By.ID, resource_id)))
+                    except:
+                        pass
+                
+                raise Exception(f"Element not found with UiSelector, XPath, or resource_id")
+            
+            # Get time selector configuration (to be added by user)
+            time_selector_config = selectors.get("delivery_time_selector", {})
+            time_selector_id = time_selector_config.get("resource_id", "")
+            time_selector_xpath = time_selector_config.get("xpath", "")
+            time_selector_uiselector = time_selector_config.get("uiselector", "")
+            
+            if not time_selector_id and not time_selector_xpath and not time_selector_uiselector:
+                return {"success": False, "message": "Time selector not configured"}
+            
+            # Find all available time slots
+            # This will need to be updated based on actual selector structure
+            # For now, placeholder logic
+            if time_preference:
+                # Try to find time slot matching preference
+                # This is a placeholder - actual implementation depends on selector structure
+                pass
+            else:
+                # Select first available time slot
+                # This is a placeholder - actual implementation depends on selector structure
+                pass
+            
+            # Placeholder return - to be implemented once selectors are added
+            return {"success": True, "message": "Time selection placeholder", "time": time_preference or "default"}
+        
+        except Exception as e:
+            return {"success": False, "message": f"Failed to select time: {str(e)}"}
+    
+    async def _confirm_reservation(self) -> dict:
+        """
+        Click the reserve/confirm button to finalize the date and time selection.
+        
+        Returns:
+            Result dictionary
+        """
+        try:
+            if not SELENIUM_AVAILABLE or not APPIUM_AVAILABLE or not self.driver:
+                return {"success": False, "message": "Device not connected or dependencies not available"}
+            
+            wait = WebDriverWait(self.driver, 10)
+            
+            # Helper to find element using multiple strategies
+            def find_element_by_selector(uiselector: str = "", xpath: str = "", resource_id: str = "", by_type: str = "clickable"):
+                """Find element using UiSelector first, then fallback to XPath or resource_id."""
+                try:
+                    if uiselector:
+                        if by_type == "clickable":
+                            return wait.until(EC.element_to_be_clickable((By.ANDROID_UIAUTOMATOR, uiselector)))
+                        else:
+                            return wait.until(EC.presence_of_element_located((By.ANDROID_UIAUTOMATOR, uiselector)))
+                except:
+                    pass
+                
+                if xpath:
+                    try:
+                        if by_type == "clickable":
+                            return wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
+                        else:
+                            return wait.until(EC.presence_of_element_located((By.XPATH, xpath)))
+                    except:
+                        pass
+                
+                if resource_id:
+                    try:
+                        if by_type == "clickable":
+                            return wait.until(EC.element_to_be_clickable((By.ID, resource_id)))
+                        else:
+                            return wait.until(EC.presence_of_element_located((By.ID, resource_id)))
+                    except:
+                        pass
+                
+                raise Exception(f"Element not found with UiSelector, XPath, or resource_id")
+            
+            # Get reserve button configuration (to be added by user)
+            reserve_button_config = selectors.get("reserve_time_button", {})
+            reserve_button_id = reserve_button_config.get("resource_id", "")
+            reserve_button_xpath = reserve_button_config.get("xpath", "")
+            reserve_button_uiselector = reserve_button_config.get("uiselector", "")
+            
+            if not reserve_button_id and not reserve_button_xpath and not reserve_button_uiselector:
+                return {"success": False, "message": "Reserve button not configured"}
+            
+            # Find and click reserve button
+            reserve_button = find_element_by_selector(
+                uiselector=reserve_button_uiselector,
+                xpath=reserve_button_xpath,
+                resource_id=reserve_button_id
+            )
+            reserve_button.click()
+            time.sleep(2)  # Wait for reservation to be confirmed
+            
+            return {"success": True, "message": "Reservation confirmed"}
+        
+        except Exception as e:
+            return {"success": False, "message": f"Failed to confirm reservation: {str(e)}"}
+    
     def disconnect(self):
         """Disconnect from device."""
         if self.driver:

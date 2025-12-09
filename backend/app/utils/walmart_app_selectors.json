@@ -133,5 +133,65 @@
         "resource_id": "com.walmart.android:id/payments_info_container",
         "xpath": "//androidx.cardview.widget.CardView[@resource-id=\"com.walmart.android:id/payments_info_container\"]/android.view.ViewGroup",
         "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/payments_info_container\")"
+    },
+    "delivery_options":{
+       "xpath": "(//android.widget.LinearLayout[@resource-id=\"com.walmart.android:id/basket_switching_container\"])[2]",
+       "uiselector": "(//android.widget.LinearLayout[@resource-id=\"com.walmart.android:id/basket_switching_container\"])[2]"
+    },
+    "cart_view_address_and_delivery_time_button":{
+        "resource_id": "com.walmart.android:id/fulfillment_address",
+        "xpath": "//android.widget.Button[@content-desc=\"Reserve a time\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/fulfillment_cta_button\")"
+    },
+    "cart_view_change_address_button":{
+        "resource_id": "com.walmart.android:id/bookslot_change",
+        "xpath": "//android.widget.Button[@content-desc=\"Change delivery address\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/bookslot_change\")"
+    },
+    "address_recycler_view":{
+        "resource_id": "com.walmart.android:id/select_address_recycler_view",
+        "xpath": "//androidx.recyclerview.widget.RecyclerView[@resource-id=\"com.walmart.android:id/select_address_recycler_view\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/select_address_recycler_view\")"
+    },
+    "address_name_radio_button":{
+        "resource_id": "com.walmart.android:id/choose_address_radio_button",
+        "xpath": "//android.widget.RadioButton[@resource-id=\"com.walmart.android:id/choose_address_radio_button\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/choose_address_radio_button\")",
+        "note": "Radio button for address selection - text will be matched dynamically"
+    },
+    "delivery_options_third_card":{
+        "xpath": "//android.widget.LinearLayout[@resource-id=\"com.walmart.android:id/basket_switching_expand_view\"]/android.widget.LinearLayout[@resource-id=\"com.walmart.android:id/basket_switching_container\"]/androidx.cardview.widget.CardView[3]",
+        "xpath_alt": "//android.widget.LinearLayout[@resource-id=\"com.walmart.android:id/basket_switching_expand_view\"]//androidx.cardview.widget.CardView[.//android.widget.TextView[@text=\"Delivery\"]]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/basket_switching_expand_view\").childSelector(new UiSelector().resourceId(\"com.walmart.android:id/basket_switching_container\")).childSelector(new UiSelector().className(\"androidx.cardview.widget.CardView\").instance(2))",
+        "note": "Third CardView (Delivery) inside basket_switching_container LinearLayout within basket_switching_expand_view. Alternative uses 'Delivery' text to find the card."
+    },
+    "delivery_options_expand_collapse_button":{
+        "resource_id": "com.walmart.android:id/collapse_expand_header",
+        "xpath": "//android.widget.Button[@resource-id=\"com.walmart.android:id/collapse_expand_header\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/collapse_expand_header\")",
+        "note": "Button to expand/collapse delivery options accordion"
+    },
+    "save_address_button":{
+        "resource_id": "com.walmart.android:id/select_address_continue_button",
+        "xpath": "//android.widget.Button[@resource-id=\"com.walmart.android:id/select_address_continue_button\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/select_address_continue_button\")"
+    },
+    "delivery_date_selector":{
+        "resource_id": "",
+        "xpath": "",
+        "uiselector": "",
+        "note": "Selector for date selection - to be configured. Should target the date selector container or individual date buttons."
+    },
+    "delivery_time_selector":{
+        "resource_id": "",
+        "xpath": "",
+        "uiselector": "",
+        "note": "Selector for time slot selection - to be configured. Should target the time slot container or individual time slot radio buttons."
+    },
+    "reserve_time_button":{
+        "resource_id": "",
+        "xpath": "",
+        "uiselector": "",
+        "note": "Button to confirm/reserve the selected date and time - to be configured."
     }
 }
