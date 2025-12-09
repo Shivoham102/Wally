@@ -1155,7 +1155,7 @@ class AutomationService:
                             int(screen_size['height'] * 0.7),
                             int(screen_size['width'] / 2),
                             int(screen_size['height'] * 0.3),
-                            500
+                            600
                         )
                         time.sleep(1)
                         attempt += 1
@@ -1264,7 +1264,7 @@ class AutomationService:
             except Exception as e:
                 return {"success": False, "message": f"Step 2 failed - Could not open address accordion: {str(e)}"}
             
-            # Step 3: Click on delivery option
+            # Step 3: Click on delivery option (only if not already selected)
             try:
                 delivery_option_config = selectors.get("home_page_delivery_option", {})
                 delivery_option_id = delivery_option_config.get("resource_id", "")
@@ -1279,8 +1279,23 @@ class AutomationService:
                     xpath=delivery_option_xpath,
                     resource_id=delivery_option_id
                 )
-                delivery_option.click()
-                time.sleep(2)  # Wait for delivery option to be selected
+                
+                # Check if delivery is already selected by looking for "Clear" in the icon's content-desc
+                # The icon is inside the delivery option RelativeLayout
+                try:
+                    delivery_icon = delivery_option.find_element(By.ID, "com.walmart.android:id/global_intent_center_item_icon")
+                    icon_content_desc = delivery_icon.get_attribute("content-desc") or ""
+                    if "clear" in icon_content_desc.lower():
+                        # Delivery is already selected, don't click it
+                        print("Delivery option already selected, skipping click")
+                    else:
+                        # Delivery is not selected, click it
+                        delivery_option.click()
+                        time.sleep(2)  # Wait for delivery option to be selected
+                except:
+                    # If we can't find the icon, try clicking anyway (fallback)
+                    delivery_option.click()
+                    time.sleep(2)  # Wait for delivery option to be selected
             except Exception as e:
                 return {"success": False, "message": f"Step 3 failed - Could not click delivery option: {str(e)}"}
             
@@ -1293,6 +1308,9 @@ class AutomationService:
                     expanded_address_uiselector = selectors.get("home_page_expanded_address_text", {}).get("uiselector", "")
                     
                     if expanded_address_id or expanded_address_xpath or expanded_address_uiselector:
+                        # Wait a bit for the expanded view to fully load after clicking delivery
+                        time.sleep(1)
+                        
                         expanded_address_element = find_element_by_selector(
                             uiselector=expanded_address_uiselector,
                             xpath=expanded_address_xpath,
@@ -1301,15 +1319,24 @@ class AutomationService:
                         )
                         
                         displayed_address = expanded_address_element.text.strip() if expanded_address_element.text else ""
-                        if displayed_address and settings.customer_address.lower() in displayed_address.lower():
+                        target_address_lower = settings.customer_address.strip().lower()
+                        
+                        print(f"Checking address match - Displayed: '{displayed_address}', Target: '{target_address_lower}'")
+                        
+                        if displayed_address and target_address_lower in displayed_address.lower():
                             # Address matches, no need to change
+                            print(f"Address already matches: {displayed_address}")
                             return {"success": True, "message": f"Address already matches stored address: {displayed_address}"}
                         
                         # Address doesn't match, click on the address TextView to change it
+                        print(f"Address doesn't match, proceeding to change address")
                         # The TextView itself is clickable and navigates to address selection
                         # We already have the element, so just click it directly - no need to lookup the card container
                         expanded_address_element.click()
                         time.sleep(2)  # Wait for address selection screen to open
+                    else:
+                        # Selector not configured, skip address check
+                        print("Address selector not configured, skipping address check")
                 except Exception as e:
                     return {"success": False, "message": f"Step 4 failed - Could not check or click address card: {str(e)}"}
             else:
