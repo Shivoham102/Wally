@@ -16,6 +16,12 @@
         "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/tempo_components_internal_contentContainerView\")",
         "note": "Products RecyclerView - second RecyclerView in layout"
     },
+    "products_recycler_view": {
+        "resource_id": "com.walmart.android:id/recycler_view",
+        "xpath": "//androidx.recyclerview.widget.RecyclerView[@resource-id=\"com.walmart.android:id/recycler_view\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/recycler_view\")",
+        "note": "Products RecyclerView containing only actual products (no ads) - use this for scrolling to top"
+    },
     "filters_recycler": {
         "resource_id": "com.walmart.android:id/tempo_shared_internal_content_container_top",
         "xpath": "//androidx.recyclerview.widget.RecyclerView[@resource-id=\"com.walmart.android:id/tempo_shared_internal_content_container_top\"]",

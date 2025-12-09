@@ -110,23 +110,32 @@ class VoiceService:
         if intent_type == "add_items":
             items_data = intent.get("items", [])
             
-            # Convert items to format expected by automation service
+            # Convert items to structured format expected by add_items_to_cart_structured
             # LLM returns: [{"item": "milk", "quantity": 3}, {"item": "eggs", "quantity": 2}]
-            # Automation expects: ["3 milk", "2 eggs"] or will parse quantities itself
-            items_for_automation = []
+            items_structured = []
             
             for item_obj in items_data:
                 # Handle both object format (from LLM) and string format (fallback)
                 if isinstance(item_obj, dict):
-                    item_name = item_obj.get("item", "")
-                    quantity = item_obj.get("quantity", 1)
-                    items_for_automation.append(f"{quantity} {item_name}")
+                    # Already in correct format: {"item": "milk", "quantity": 3}
+                    items_structured.append({
+                        "item": item_obj.get("item", ""),
+                        "quantity": item_obj.get("quantity", 1)
+                    })
                 elif isinstance(item_obj, str):
-                    # Fallback: already a string like "3 milk" or just "milk"
-                    items_for_automation.append(item_obj)
+                    # Fallback: parse string like "3 milk" or just "milk"
+                    parts = item_obj.strip().split(None, 1)
+                    if len(parts) == 2 and parts[0].isdigit():
+                        quantity = int(parts[0])
+                        item_name = parts[1]
+                    else:
+                        quantity = 1
+                        item_name = item_obj.strip()
+                    items_structured.append({"item": item_name, "quantity": quantity})
             
-            result = await self.automation_service.add_items_to_cart(items_for_automation)
-            return {"action": "add_items", "items": items_data, "status": result}
+            # Use structured method for better reliability
+            result = await self.automation_service.add_items_to_cart_structured(items_structured)
+            return {"action": "add_items", "items": items_structured, "status": result}
         
         elif intent_type == "reorder":
             # Reorder from last order in Walmart app
@@ -140,29 +149,42 @@ class VoiceService:
             # First, reorder last order
             reorder_result = await self.automation_service.reorder_last_order()
             
-            # Then add extra items
+            # Then add extra items using structured format
             if items_data and reorder_result.get("success"):
-                items_for_automation = []
+                # Convert items to structured format expected by add_items_to_cart_structured
+                items_structured = []
                 for item_obj in items_data:
                     if isinstance(item_obj, dict):
-                        item_name = item_obj.get("item", "")
-                        quantity = item_obj.get("quantity", 1)
-                        items_for_automation.append(f"{quantity} {item_name}")
+                        # Already in correct format: {"item": "milk", "quantity": 2}
+                        items_structured.append({
+                            "item": item_obj.get("item", ""),
+                            "quantity": item_obj.get("quantity", 1)
+                        })
                     elif isinstance(item_obj, str):
-                        items_for_automation.append(item_obj)
+                        # Fallback: parse string like "3 milk" or just "milk"
+                        parts = item_obj.strip().split(None, 1)
+                        if len(parts) == 2 and parts[0].isdigit():
+                            quantity = int(parts[0])
+                            item_name = parts[1]
+                        else:
+                            quantity = 1
+                            item_name = item_obj.strip()
+                        items_structured.append({"item": item_name, "quantity": quantity})
                 
-                add_result = await self.automation_service.add_items_to_cart(items_for_automation)
+                # Use structured method for better reliability
+                add_result = await self.automation_service.add_items_to_cart_structured(items_structured)
                 return {
                     "action": "reorder_with_items",
                     "reorder_status": reorder_result,
-                    "extra_items": items_data,
+                    "extra_items": items_structured,
                     "add_items_status": add_result
                 }
             
             return {
                 "action": "reorder_with_items",
                 "reorder_status": reorder_result,
-                "extra_items": items_data
+                "extra_items": items_data,
+                "message": "Reorder completed, but no extra items to add" if not items_data else "Reorder failed, skipping extra items"
             }
         
         elif intent_type == "list_items":

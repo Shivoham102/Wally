@@ -405,7 +405,7 @@ class AutomationService:
             wait = WebDriverWait(self.driver, 5)
             wait_short = WebDriverWait(self.driver, 3)  # For quick checks
             
-            # Wait for product list to load (quick check)
+            # Wait for product list to load (quick check) - this is the main container
             try:
                 product_list = wait_short.until(
                     EC.presence_of_element_located((By.XPATH, selectors.get("product_list", {}).get("xpath", "")))
@@ -419,23 +419,66 @@ class AutomationService:
                 except Exception as e:
                     return {"success": False, "message": f"❌ STEP 1 FAILED - Products RecyclerView not found: {str(e)}"}
             
-            # MANDATORY SCROLL: Scroll down a bit to ensure first product and add to cart button are in view
-            # This is necessary because ads or other elements might push products off-screen
+            # Get the products RecyclerView (recycler_view) that contains only actual products (no ads)
+            # This is different from product_list which is the main container
+            products_recycler = None
             try:
-                screen_size = self.driver.get_window_size()
-                # Scroll down by swiping up (moves content up, revealing products below)
-                # Scroll amount: 15% of screen height (from 70% to 55%)
-                self.driver.swipe(
-                    int(screen_size['width'] / 2),
-                    int(screen_size['height'] * 0.7),  # Start from 70% down
-                    int(screen_size['width'] / 2),
-                    int(screen_size['height'] * 0.55),  # Move to 55% down (15% scroll)
-                    500  # duration in ms
+                products_recycler = wait_short.until(
+                    EC.presence_of_element_located((By.XPATH, selectors.get("products_recycler_view", {}).get("xpath", "")))
                 )
-                time.sleep(0.5)  # Wait for scroll to complete and UI to settle
-            except Exception as e:
-                # If scroll fails, continue anyway - element might already be visible
-                pass
+            except:
+                # Fallback to resource ID
+                try:
+                    products_recycler = wait_short.until(
+                        EC.presence_of_element_located((By.ID, selectors.get("products_recycler_view", {}).get("resource_id", "")))
+                    )
+                except:
+                    pass  # If we can't find it, continue without scrolling
+            
+            # Scroll the page to position the RecyclerView's top edge at the top of the screen
+            # This brings the RecyclerView container itself to the top, not scrolling its content
+            if products_recycler:
+                try:
+                    recycler_location = products_recycler.location
+                    recycler_top_y = recycler_location['y']
+                    
+                    # Get screen dimensions
+                    screen_size = self.driver.get_window_size()
+                    # Account for status bar/action bar - we want RecyclerView just below it
+                    # Typically around 100-150px from top for action bar
+                    target_top_y = 150  # Target position accounting for app bar
+                    screen_center_x = int(screen_size['width'] / 2)
+                    
+                    # Calculate exact scroll needed: difference between RecyclerView's current top and target
+                    scroll_needed = recycler_top_y - target_top_y
+                    
+                    # Only scroll if RecyclerView is significantly below target (with larger threshold)
+                    if scroll_needed > 30:  # Only scroll if more than 30px off
+                        # Scroll the page by the calculated amount
+                        # Use a smaller scroll distance to avoid over-scrolling
+                        # Start from middle of screen (safe from gesture zones)
+                        start_y = int(screen_size['height'] * 0.5)
+                        # Scroll by the exact amount needed, but cap it to avoid over-scrolling
+                        max_scroll = int(screen_size['height'] * 0.3)  # Max 30% of screen height
+                        scroll_amount = min(scroll_needed, max_scroll)
+                        end_y = int(start_y - scroll_amount)
+                        
+                        # Ensure we don't scroll outside screen bounds
+                        min_y = 100  # Minimum Y (with margin to avoid gesture zones)
+                        if end_y < min_y:
+                            end_y = min_y
+                        
+                        self.driver.swipe(
+                            screen_center_x,
+                            start_y,
+                            screen_center_x,
+                            end_y,
+                            250  # Slower, more controlled scroll
+                        )
+                        
+                except Exception as e:
+                    # If scroll fails, continue anyway - RecyclerView might already be at top
+                    pass
             
             # Helper function to find and scroll element into view, then click
             def find_and_click_element(xpath=None, uiselector=None, resource_id=None, scroll_into_view=True):
