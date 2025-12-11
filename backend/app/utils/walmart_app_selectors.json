@@ -55,7 +55,7 @@
     },
     "cart_button": {
         "resource_id": "com.walmart.android:id/cart_summary_icon",
-        "xpath": "//android.widget.ImageView[@content-desc=\"Cart contains 0 items, order total is $0.00\"]",
+        "xpath": "//android.widget.ImageView[@resource-id=\"com.walmart.android:id/cart_summary_icon\"]",
         "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/cart_summary_icon\")"
     },
     "address_button": {
@@ -139,7 +139,7 @@
        "uiselector": "(//android.widget.LinearLayout[@resource-id=\"com.walmart.android:id/basket_switching_container\"])[2]"
     },
     "cart_view_address_and_delivery_time_button":{
-        "resource_id": "com.walmart.android:id/fulfillment_address",
+        "resource_id": "com.walmart.android:id/fulfillment_cta_button",
         "xpath": "//android.widget.Button[@content-desc=\"Reserve a time\"]",
         "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/fulfillment_cta_button\")"
     },
@@ -176,23 +176,23 @@
         "xpath": "//android.widget.Button[@resource-id=\"com.walmart.android:id/select_address_continue_button\"]",
         "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/select_address_continue_button\")"
     },
-    "delivery_date_selector":{
-        "resource_id": "",
-        "xpath": "",
-        "uiselector": "",
-        "note": "Selector for date selection - to be configured. Should target the date selector container or individual date buttons."
+    "delivery_day_date_recycler_view":{
+        "resource_id": "com.walmart.android:id/bookslot_day_carousel_recycler_view",
+        "xpath": "//androidx.recyclerview.widget.RecyclerView[@resource-id=\"com.walmart.android:id/bookslot_day_carousel_recycler_view\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/bookslot_day_carousel_recycler_view\")",
+        "note": "RecyclerView containing ViewGroups for each day/date. Each ViewGroup represents a selectable date option."
     },
-    "delivery_time_selector":{
-        "resource_id": "",
-        "xpath": "",
-        "uiselector": "",
-        "note": "Selector for time slot selection - to be configured. Should target the time slot container or individual time slot radio buttons."
+    "delivery_time_recycler_view":{
+        "resource_id": "com.walmart.android:id/bookslot_recycler_view",
+        "xpath": "//androidx.recyclerview.widget.RecyclerView[@resource-id=\"com.walmart.android:id/bookslot_recycler_view\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/bookslot_recycler_view\")",
+        "note": "RecyclerView containing ViewGroups for each time slot. Each ViewGroup represents a selectable time slot option."
     },
     "reserve_time_button":{
-        "resource_id": "",
-        "xpath": "",
-        "uiselector": "",
-        "note": "Button to confirm/reserve the selected date and time - to be configured."
+        "resource_id": "com.walmart.android:id/bookslot_bottom_button",
+        "xpath": "//android.widget.Button[@resource-id=\"com.walmart.android:id/bookslot_bottom_button\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/bookslot_bottom_button\")",
+        "note": "Button to confirm/reserve the selected date and time"
     },
     "home_page_address_accordion":{
         "resource_id": "com.walmart.android:id/global_intent_center_collapsed_view",

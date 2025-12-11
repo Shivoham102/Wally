@@ -47,7 +47,7 @@ For time preferences, users may say:
 - "morning" → "morning" (first available morning slot)
 - "afternoon" → "afternoon" (first available afternoon slot)
 - "evening" → "evening" (first available evening slot)
-- Specific times like "7am" → try to match to closest slot like "7am-9am"
+- Specific times like "7am", "8am", "2pm" → pass through as-is (e.g., "8am", "2pm"). The system will find which time slot contains this time.
 
 Example responses:
 {"type": "add_items", "items": [{"item": "milk", "quantity": 1}, {"item": "eggs", "quantity": 1}], "confidence": 0.95}
@@ -167,11 +167,16 @@ Example responses:
             elif "evening" in command_lower:
                 time_pref = "evening"
             elif "am" in command_lower or "pm" in command_lower:
-                # Try to extract time range
+                # Try to extract time range first (e.g., "6am-8am", "6am to 8am")
                 import re
-                time_match = re.search(r'(\d+)\s*(am|pm)\s*-?\s*(\d+)\s*(am|pm)?', command_lower)
-                if time_match:
-                    time_pref = f"{time_match.group(1)}{time_match.group(2)}-{time_match.group(3)}{time_match.group(4) if time_match.group(4) else time_match.group(2)}"
+                time_range_match = re.search(r'(\d+)\s*(am|pm)\s*(?:-|to)\s*(\d+)\s*(am|pm)?', command_lower)
+                if time_range_match:
+                    time_pref = f"{time_range_match.group(1)}{time_range_match.group(2)}-{time_range_match.group(3)}{time_range_match.group(4) if time_range_match.group(4) else time_range_match.group(2)}"
+                else:
+                    # Try to extract specific time (e.g., "8am", "2pm")
+                    time_specific_match = re.search(r'(\d+)\s*(am|pm)\b', command_lower)
+                    if time_specific_match:
+                        time_pref = f"{time_specific_match.group(1)}{time_specific_match.group(2)}"
             
             return {
                 "type": "place_order",

@@ -212,17 +212,14 @@ async def place_order(request: Optional[PlaceOrderRequest] = None):
     """
     Place an order in Walmart app.
     
+    Note: Delivery option and address selection are handled at app startup.
+    
     This endpoint:
     1. Clicks cart button
-    2. Clicks on third card inside delivery_options LinearLayout
-    3. Clicks cart_view_address_and_delivery_time_button
-    4. Sets correct address by:
-       - Clicking cart_view_change_address_button
-       - Finding address matching customer name in address_recycler_view
-       - Clicking the matching address radio button
-    5. Selects delivery date (if date_preference provided)
-    6. Selects delivery time slot (if time_preference provided)
-    7. Confirms reservation
+    2. Clicks cart_view_address_and_delivery_time_button (to get to date/time selection)
+    3. Selects delivery date (if date_preference provided)
+    4. Selects delivery time slot (if time_preference provided)
+    5. Confirms reservation
     
     Example request:
     POST /api/v1/automation/place-order
@@ -244,7 +241,7 @@ async def place_order(request: Optional[PlaceOrderRequest] = None):
             "result": result,
             "date_preference": date_pref,
             "time_preference": time_pref,
-            "note": "Places order with address matching configured customer name"
+            "note": "Places order (address and delivery option should be set at app startup)"
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to place order: {str(e)}")
