@@ -140,7 +140,7 @@
     },
     "cart_view_address_and_delivery_time_button":{
         "resource_id": "com.walmart.android:id/fulfillment_cta_button",
-        "xpath": "//android.widget.Button[@content-desc=\"Reserve a time\"]",
+        "xpath": "//android.widget.Button[@resource-id=\"com.walmart.android:id/fulfillment_cta_button\"]",
         "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/fulfillment_cta_button\")"
     },
     "cart_view_change_address_button":{

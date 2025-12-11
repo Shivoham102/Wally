@@ -1661,27 +1661,25 @@ class AutomationService:
                 by_type="presence"
             )
             
-            # Find parent ViewGroups (direct children of RecyclerView) that have date info
-            # These are the date options with content-desc containing "Radio Button"
-            date_viewgroups_raw = date_recycler.find_elements(By.XPATH, ".//android.view.ViewGroup[contains(@content-desc, 'Radio Button')]")
+            # Helper function to find and filter date ViewGroups
+            def find_date_viewgroups():
+                date_viewgroups_raw = date_recycler.find_elements(By.XPATH, ".//android.view.ViewGroup[contains(@content-desc, 'Radio Button')]")
+                parent_date_viewgroups = []
+                for vg in date_viewgroups_raw:
+                    try:
+                        content_desc = vg.get_attribute("content-desc") or ""
+                        is_clickable = vg.get_attribute("clickable") == "true"
+                        is_selected = "Selected" in content_desc
+                        if "Radio Button" in content_desc and (is_clickable or is_selected):
+                            parent_date_viewgroups.append(vg)
+                    except Exception:
+                        continue
+                return parent_date_viewgroups
             
-            # Filter to only get parent ViewGroups (not nested ones)
-            # Parent ViewGroups have "Radio Button" in content-desc and are either clickable OR selected
-            parent_date_viewgroups = []
-            for vg in date_viewgroups_raw:
-                try:
-                    content_desc = vg.get_attribute("content-desc") or ""
-                    is_clickable = vg.get_attribute("clickable") == "true"
-                    is_selected = "Selected" in content_desc
-                    if "Radio Button" in content_desc and (is_clickable or is_selected):
-                        parent_date_viewgroups.append(vg)
-                except Exception:
-                    continue
-            
-            date_viewgroups = parent_date_viewgroups
-            
-            if not date_viewgroups:
-                return {"success": False, "message": "No date options found in RecyclerView"}
+            # Try to find date ViewGroups, scroll if needed
+            date_viewgroups = find_date_viewgroups()
+            max_scroll_attempts = 5
+            scroll_attempts = 0
             
             # Parse date preference if provided
             selected_date_viewgroup = None
@@ -1691,77 +1689,86 @@ class AutomationService:
                 # Normalize date preference for matching
                 date_pref_lower = date_preference.lower().strip()
                 
-                # Try to match date preference
-                if date_pref_lower == "today":
-                    # Find "Today" by "Selected" in content-desc
-                    for vg in date_viewgroups:
-                        try:
-                            content_desc = vg.get_attribute("content-desc") or ""
-                            if "Today" in content_desc and "Selected" in content_desc:
+                # Try to match date preference with scrolling
+                while scroll_attempts < max_scroll_attempts and not selected_date_viewgroup:
+                    # Try to match date preference
+                    if date_pref_lower == "today":
+                        # Find "Today" by "Selected" in content-desc
+                        for vg in date_viewgroups:
+                            try:
+                                content_desc = vg.get_attribute("content-desc") or ""
+                                if "Today" in content_desc and "Selected" in content_desc:
+                                    viewgroup_text_lower = content_desc.lower()
+                                    if "full" not in viewgroup_text_lower:
+                                        selected_date_viewgroup = vg
+                                        selected_date_text = content_desc.split("Radio Button")[0].strip()
+                                        break
+                            except Exception:
+                                continue
+                    elif date_pref_lower == "tomorrow":
+                        # Tomorrow is always the second item (index 1)
+                        if len(date_viewgroups) > 1:
+                            try:
+                                tomorrow_vg = date_viewgroups[1]
+                                content_desc = tomorrow_vg.get_attribute("content-desc") or ""
                                 viewgroup_text_lower = content_desc.lower()
                                 if "full" not in viewgroup_text_lower:
-                                    selected_date_viewgroup = vg
+                                    selected_date_viewgroup = tomorrow_vg
                                     selected_date_text = content_desc.split("Radio Button")[0].strip()
-                                    break
-                        except Exception:
-                            continue
-                elif date_pref_lower == "tomorrow":
-                    # Tomorrow is always the second item (index 1)
-                    if len(date_viewgroups) > 1:
-                        try:
-                            tomorrow_vg = date_viewgroups[1]
-                            content_desc = tomorrow_vg.get_attribute("content-desc") or ""
-                            viewgroup_text_lower = content_desc.lower()
-                            if "full" not in viewgroup_text_lower:
-                                selected_date_viewgroup = tomorrow_vg
-                                selected_date_text = content_desc.split("Radio Button")[0].strip()
-                        except Exception:
-                            pass
-                else:
-                    # Match by day name (e.g., "Thursday", "Thu") or date format (e.g., "12/11")
-                    day_names = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-                    day_abbrevs = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
-                    
-                    # Check if preference matches a day name
-                    matched_day = None
-                    for day_name, day_abbrev in zip(day_names, day_abbrevs):
-                        if day_name in date_pref_lower or day_abbrev in date_pref_lower:
-                            matched_day = (day_name, day_abbrev)
-                            break
-                    
-                    # Try to match day name or date format
-                    for viewgroup in date_viewgroups:
-                        try:
-                            content_desc = viewgroup.get_attribute("content-desc") or ""
-                            content_desc_lower = content_desc.lower()
-                            
-                            # Skip if it says "Full"
-                            if "full" in content_desc_lower:
-                                continue
-                            
-                            # Match by day name if we found a day match
-                            if matched_day:
-                                day_name, day_abbrev = matched_day
-                                if day_name in content_desc_lower or day_abbrev in content_desc_lower:
-                                    selected_date_viewgroup = viewgroup
-                                    selected_date_text = content_desc.split("Radio Button")[0].strip()
-                                    break
-                            
-                            # Try matching date format (e.g., "12/11", "12-11")
-                            if not selected_date_viewgroup and any(char.isdigit() for char in date_pref_lower):
-                                pref_date_parts = re.findall(r'\d+', date_pref_lower)
-                                viewgroup_date_parts = re.findall(r'\d+', content_desc_lower)
+                            except Exception:
+                                pass
+                    else:
+                        # Match by day name (e.g., "Thursday", "Thu") or date format (e.g., "12/11")
+                        day_names = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+                        day_abbrevs = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+                        
+                        # Check if preference matches a day name
+                        matched_day = None
+                        for day_name, day_abbrev in zip(day_names, day_abbrevs):
+                            if day_name in date_pref_lower or day_abbrev in date_pref_lower:
+                                matched_day = (day_name, day_abbrev)
+                                break
+                        
+                        # Try to match day name or date format
+                        for viewgroup in date_viewgroups:
+                            try:
+                                content_desc = viewgroup.get_attribute("content-desc") or ""
+                                content_desc_lower = content_desc.lower()
                                 
-                                if pref_date_parts and viewgroup_date_parts:
-                                    if all(part in viewgroup_date_parts for part in pref_date_parts):
+                                # Skip if it says "Full"
+                                if "full" in content_desc_lower:
+                                    continue
+                                
+                                # Match by day name if we found a day match
+                                if matched_day:
+                                    day_name, day_abbrev = matched_day
+                                    if day_name in content_desc_lower or day_abbrev in content_desc_lower:
                                         selected_date_viewgroup = viewgroup
                                         selected_date_text = content_desc.split("Radio Button")[0].strip()
                                         break
-                        except Exception:
-                            continue
+                                
+                                # Try matching date format (e.g., "12/11", "12-11")
+                                if not selected_date_viewgroup and any(char.isdigit() for char in date_pref_lower):
+                                    pref_date_parts = re.findall(r'\d+', date_pref_lower)
+                                    viewgroup_date_parts = re.findall(r'\d+', content_desc_lower)
+                                    
+                                    if pref_date_parts and viewgroup_date_parts:
+                                        if all(part in viewgroup_date_parts for part in pref_date_parts):
+                                            selected_date_viewgroup = viewgroup
+                                            selected_date_text = content_desc.split("Radio Button")[0].strip()
+                                            break
+                            except Exception:
+                                continue
+                    
+                    # If not found, scroll and try again
+                    if not selected_date_viewgroup:
+                        # Scroll right (swipe left) to see more dates
+                        self._scroll_recycler_horizontal(date_recycler, direction="right")
+                        scroll_attempts += 1
+                        date_viewgroups = find_date_viewgroups()
                 
                 if not selected_date_viewgroup:
-                    return {"success": False, "message": f"Could not find date matching preference '{date_preference}'"}
+                    return {"success": False, "message": f"Could not find date matching preference '{date_preference}' after scrolling"}
             else:
                 # No preference - select first available date (not "Full")
                 for viewgroup in date_viewgroups:
@@ -1792,6 +1799,66 @@ class AutomationService:
         
         except Exception as e:
             return {"success": False, "message": f"Failed to select date: {str(e)}"}
+    
+    def _scroll_recycler_horizontal(self, recycler_element, direction: str = "right", scroll_amount: int = 300) -> None:
+        """
+        Scroll a RecyclerView horizontally.
+        
+        Args:
+            recycler_element: The RecyclerView WebElement
+            direction: "right" to scroll right (swipe left), "left" to scroll left (swipe right)
+            scroll_amount: Pixels to scroll (default 300)
+        """
+        try:
+            location = recycler_element.location
+            size = recycler_element.size
+            
+            center_x = location['x'] + size['width'] / 2
+            center_y = location['y'] + size['height'] / 2
+            
+            if direction == "right":
+                # Swipe left to scroll right (to see items on the right)
+                start_x = int(center_x + scroll_amount / 2)
+                end_x = int(center_x - scroll_amount / 2)
+            else:  # left
+                # Swipe right to scroll left (to see items on the left)
+                start_x = int(center_x - scroll_amount / 2)
+                end_x = int(center_x + scroll_amount / 2)
+            
+            self.driver.swipe(start_x, int(center_y), end_x, int(center_y), 300)
+            time.sleep(0.5)  # Wait for scroll to complete
+        except Exception:
+            pass
+    
+    def _scroll_recycler_vertical(self, recycler_element, direction: str = "down", scroll_amount: int = 400) -> None:
+        """
+        Scroll a RecyclerView vertically.
+        
+        Args:
+            recycler_element: The RecyclerView WebElement
+            direction: "down" to scroll down (swipe up), "up" to scroll up (swipe down)
+            scroll_amount: Pixels to scroll (default 400)
+        """
+        try:
+            location = recycler_element.location
+            size = recycler_element.size
+            
+            center_x = location['x'] + size['width'] / 2
+            center_y = location['y'] + size['height'] / 2
+            
+            if direction == "down":
+                # Swipe up to scroll down (to see items below)
+                start_y = int(center_y + scroll_amount / 2)
+                end_y = int(center_y - scroll_amount / 2)
+            else:  # up
+                # Swipe down to scroll up (to see items above)
+                start_y = int(center_y - scroll_amount / 2)
+                end_y = int(center_y + scroll_amount / 2)
+            
+            self.driver.swipe(int(center_x), start_y, int(center_x), end_y, 300)
+            time.sleep(0.5)  # Wait for scroll to complete
+        except Exception:
+            pass
     
     def _parse_time_to_minutes(self, time_str: str) -> Optional[int]:
         """
@@ -1963,38 +2030,42 @@ class AutomationService:
             # Wait a bit for time slots to load after date selection
             time.sleep(1)
             
-            # Find all time slot ViewGroups with resource-id="bookslot_slot_item_layout"
-            # These are the actual time slot options (skip store info and promotions)
-            time_slot_item_layout_id = "com.walmart.android:id/bookslot_slot_item_layout"
-            time_slot_viewgroups = time_recycler.find_elements(By.ID, time_slot_item_layout_id)
-            
-            if not time_slot_viewgroups:
-                return {"success": False, "message": "No time slots found in RecyclerView"}
-            
-            # Filter out store info (first ViewGroup) and promotions (wplus_signup_card)
-            actual_time_slots = []
-            for i, vg in enumerate(time_slot_viewgroups):
-                try:
-                    # Check if this ViewGroup contains wplus_signup_card (promotion)
-                    wplus_cards = vg.find_elements(By.ID, "com.walmart.android:id/wplus_signup_card")
-                    if wplus_cards:
+            # Helper function to find and filter time slot ViewGroups
+            def find_time_slots():
+                time_slot_item_layout_id = "com.walmart.android:id/bookslot_slot_item_layout"
+                time_slot_viewgroups = time_recycler.find_elements(By.ID, time_slot_item_layout_id)
+                
+                if not time_slot_viewgroups:
+                    return []
+                
+                actual_time_slots = []
+                for i, vg in enumerate(time_slot_viewgroups):
+                    try:
+                        # Check if this ViewGroup contains wplus_signup_card (promotion)
+                        wplus_cards = vg.find_elements(By.ID, "com.walmart.android:id/wplus_signup_card")
+                        if wplus_cards:
+                            continue
+                        
+                        # Check if this is the store info layout (first one)
+                        store_info_layouts = vg.find_elements(By.ID, "com.walmart.android:id/bookslot_delivery_store_info_layout")
+                        if store_info_layouts and i == 0:
+                            continue
+                        
+                        # This is an actual time slot - get the time TextView from it
+                        time_text_view_id = "com.walmart.android:id/bookslot_slot_time_text_view"
+                        time_text_views = vg.find_elements(By.ID, time_text_view_id)
+                        if time_text_views:
+                            actual_time_slots.append({
+                                "viewgroup": vg,
+                                "time_text": time_text_views[0].text.strip() if time_text_views[0].text else ""
+                            })
+                    except Exception:
                         continue
-                    
-                    # Check if this is the store info layout (first one)
-                    store_info_layouts = vg.find_elements(By.ID, "com.walmart.android:id/bookslot_delivery_store_info_layout")
-                    if store_info_layouts and i == 0:
-                        continue
-                    
-                    # This is an actual time slot - get the time TextView from it
-                    time_text_view_id = "com.walmart.android:id/bookslot_slot_time_text_view"
-                    time_text_views = vg.find_elements(By.ID, time_text_view_id)
-                    if time_text_views:
-                        actual_time_slots.append({
-                            "viewgroup": vg,
-                            "time_text": time_text_views[0].text.strip() if time_text_views[0].text else ""
-                        })
-                except Exception:
-                    continue
+                
+                return actual_time_slots
+            
+            # Try to find time slots, scroll if needed
+            actual_time_slots = find_time_slots()
             
             if not actual_time_slots:
                 return {"success": False, "message": "No valid time slots found after filtering"}
@@ -2009,92 +2080,176 @@ class AutomationService:
                 
                 # Check if it's a specific time (e.g., "8am", "2pm") vs a range or period
                 is_specific_time = bool(re.match(r'^\d+\s*(am|pm)$', time_pref_lower))
+                is_time_range = bool(re.search(r'\d+\s*(am|pm)\s*[- ]to[ ]\s*\d+\s*(am|pm)', time_pref_lower) or 
+                                     re.search(r'\d+\s*(am|pm)\s*-\s*\d+\s*(am|pm)', time_pref_lower))
                 
-                # Try to match time preference
-                for slot in actual_time_slots:
-                    try:
-                        vg = slot["viewgroup"]
-                        viewgroup_text = slot["time_text"]
-                        viewgroup_text_lower = viewgroup_text.lower()
-                        
-                        if not viewgroup_text:
-                            continue
-                        
-                        # Skip if it says "Full" or "Unavailable"
-                        viewgroup_full_text = vg.text.strip() if vg.text else ""
-                        viewgroup_content_desc = vg.get_attribute("content-desc") or ""
-                        if "full" in viewgroup_full_text.lower() or "unavailable" in viewgroup_full_text.lower() or "full" in viewgroup_content_desc.lower():
-                            continue
-                        
-                        # Match patterns: "morning", "afternoon", "evening", specific time ranges, or specific times
-                        if time_pref_lower == "morning":
-                            # Morning is typically 6am-12pm, look for early times
-                            if any(time_str in viewgroup_text_lower for time_str in ["6am", "7am", "8am", "9am", "10am", "11am", "12pm"]):
-                                selected_time_viewgroup = vg
-                                selected_time_text = viewgroup_text
-                                break
-                        elif time_pref_lower == "afternoon":
-                            # Afternoon is typically 12pm-5pm
-                            if any(time_str in viewgroup_text_lower for time_str in ["12pm", "1pm", "2pm", "3pm", "4pm", "5pm"]):
-                                selected_time_viewgroup = vg
-                                selected_time_text = viewgroup_text
-                                break
-                        elif time_pref_lower == "evening":
-                            # Evening is typically 5pm-9pm
-                            if any(time_str in viewgroup_text_lower for time_str in ["5pm", "6pm", "7pm", "8pm", "9pm"]):
-                                selected_time_viewgroup = vg
-                                selected_time_text = viewgroup_text
-                                break
-                        elif is_specific_time:
-                            # Specific time like "8am" - find slot where time is in the middle of the range
-                            time_range_match = re.search(r'(\d+)\s*(am|pm)\s*-\s*(\d+)\s*(am|pm)', viewgroup_text_lower)
-                            if time_range_match:
-                                start_hour = int(time_range_match.group(1))
-                                start_period = time_range_match.group(2)
-                                end_hour = int(time_range_match.group(3))
-                                end_period = time_range_match.group(4)
-                                
-                                start_minutes = self._parse_time_to_minutes(f"{start_hour}{start_period}")
-                                end_minutes = self._parse_time_to_minutes(f"{end_hour}{end_period}")
-                                target_minutes = self._parse_time_to_minutes(time_preference)
-                                
-                                if start_minutes is not None and end_minutes is not None and target_minutes is not None:
-                                    range_midpoint = (start_minutes + end_minutes) / 2
-                                    
-                                    # Check if target is within range and closer to middle than edges
-                                    if start_minutes < target_minutes < end_minutes:
-                                        distance_to_mid = abs(target_minutes - range_midpoint)
-                                        distance_to_start = abs(target_minutes - start_minutes)
-                                        distance_to_end = abs(target_minutes - end_minutes)
-                                        
-                                        # Prefer slot where time is closer to middle than to edges
-                                        if distance_to_mid < distance_to_start and distance_to_mid < distance_to_end:
-                                            selected_time_viewgroup = vg
-                                            selected_time_text = viewgroup_text
-                                            break
-                                        elif not selected_time_viewgroup:
-                                            # Keep first match as fallback
-                                            selected_time_viewgroup = vg
-                                            selected_time_text = viewgroup_text
-                        else:
-                            # Try to match specific time range (e.g., "6am-8am", "7am-9am")
-                            if time_pref_lower in viewgroup_text_lower:
-                                selected_time_viewgroup = vg
-                                selected_time_text = viewgroup_text
-                                break
+                # Try to match time preference with scrolling until end is reached
+                best_match = None  # Store best match for specific times
+                seen_time_texts = set()  # Track seen time slots to detect end of list
+                max_scroll_attempts = 50  # Increased limit, but we'll stop when we reach the end
+                scroll_attempts = 0
+                no_new_items_count = 0  # Count consecutive scrolls with no new items
+                
+                while scroll_attempts < max_scroll_attempts:
+                    # Try to match time preference
+                    for slot in actual_time_slots:
+                        try:
+                            vg = slot["viewgroup"]
+                            viewgroup_text = slot["time_text"]
+                            viewgroup_text_lower = viewgroup_text.lower()
                             
-                            # Extract time numbers from preference and check if they match
-                            time_numbers = re.findall(r'\d+', time_pref_lower)
-                            if time_numbers:
-                                if all(num in viewgroup_text_lower for num in time_numbers):
+                            if not viewgroup_text:
+                                continue
+                            
+                            # Skip if it says "Full" or "Unavailable"
+                            viewgroup_full_text = vg.text.strip() if vg.text else ""
+                            viewgroup_content_desc = vg.get_attribute("content-desc") or ""
+                            if "full" in viewgroup_full_text.lower() or "unavailable" in viewgroup_full_text.lower() or "full" in viewgroup_content_desc.lower():
+                                continue
+                            
+                            # Match patterns: "morning", "afternoon", "evening", specific time ranges, or specific times
+                            if time_pref_lower == "morning":
+                                # Morning is typically 6am-12pm, look for early times
+                                if any(time_str in viewgroup_text_lower for time_str in ["6am", "7am", "8am", "9am", "10am", "11am", "12pm"]):
                                     selected_time_viewgroup = vg
                                     selected_time_text = viewgroup_text
                                     break
-                    except Exception:
-                        continue
+                            elif time_pref_lower == "afternoon":
+                                # Afternoon is typically 12pm-5pm
+                                if any(time_str in viewgroup_text_lower for time_str in ["12pm", "1pm", "2pm", "3pm", "4pm", "5pm"]):
+                                    selected_time_viewgroup = vg
+                                    selected_time_text = viewgroup_text
+                                    break
+                            elif time_pref_lower == "evening":
+                                # Evening is typically 5pm-9pm
+                                if any(time_str in viewgroup_text_lower for time_str in ["5pm", "6pm", "7pm", "8pm", "9pm"]):
+                                    selected_time_viewgroup = vg
+                                    selected_time_text = viewgroup_text
+                                    break
+                            elif is_specific_time:
+                                # Specific time like "8am" - find slot where time is in the middle of the range
+                                time_range_match = re.search(r'(\d+)\s*(am|pm)\s*-\s*(\d+)\s*(am|pm)', viewgroup_text_lower)
+                                if time_range_match:
+                                    start_hour = int(time_range_match.group(1))
+                                    start_period = time_range_match.group(2)
+                                    end_hour = int(time_range_match.group(3))
+                                    end_period = time_range_match.group(4)
+                                    
+                                    start_minutes = self._parse_time_to_minutes(f"{start_hour}{start_period}")
+                                    end_minutes = self._parse_time_to_minutes(f"{end_hour}{end_period}")
+                                    target_minutes = self._parse_time_to_minutes(time_preference)
+                                    
+                                    if start_minutes is not None and end_minutes is not None and target_minutes is not None:
+                                        range_midpoint = (start_minutes + end_minutes) / 2
+                                        
+                                        # Check if target is within range and closer to middle than edges
+                                        if start_minutes < target_minutes < end_minutes:
+                                            distance_to_mid = abs(target_minutes - range_midpoint)
+                                            distance_to_start = abs(target_minutes - start_minutes)
+                                            distance_to_end = abs(target_minutes - end_minutes)
+                                            
+                                            # Prefer slot where time is closer to middle than to edges
+                                            if distance_to_mid < distance_to_start and distance_to_mid < distance_to_end:
+                                                selected_time_viewgroup = vg
+                                                selected_time_text = viewgroup_text
+                                                break
+                                            elif not best_match:
+                                                # Keep first match as fallback
+                                                best_match = {"viewgroup": vg, "time_text": viewgroup_text}
+                            elif is_time_range:
+                                # Try exact range matching first (e.g., "12pm-2pm" should match "12pm-2pm")
+                                # Normalize both to compare (remove spaces, lowercase)
+                                normalized_pref = re.sub(r'\s+', '', time_pref_lower)
+                                normalized_slot = re.sub(r'\s+', '', viewgroup_text_lower)
+                                
+                                if normalized_pref in normalized_slot or normalized_slot in normalized_pref:
+                                    selected_time_viewgroup = vg
+                                    selected_time_text = viewgroup_text
+                                    break
+                                
+                                # Try to parse and compare time ranges
+                                pref_range_match = re.search(r'(\d+)\s*(am|pm)\s*[- ]to[ ]\s*(\d+)\s*(am|pm)', time_pref_lower) or \
+                                                  re.search(r'(\d+)\s*(am|pm)\s*-\s*(\d+)\s*(am|pm)', time_pref_lower)
+                                slot_range_match = re.search(r'(\d+)\s*(am|pm)\s*-\s*(\d+)\s*(am|pm)', viewgroup_text_lower)
+                                
+                                if pref_range_match and slot_range_match:
+                                    pref_start_hour = int(pref_range_match.group(1))
+                                    pref_start_period = pref_range_match.group(2)
+                                    pref_end_hour = int(pref_range_match.group(3))
+                                    pref_end_period = pref_range_match.group(4)
+                                    
+                                    slot_start_hour = int(slot_range_match.group(1))
+                                    slot_start_period = slot_range_match.group(2)
+                                    slot_end_hour = int(slot_range_match.group(3))
+                                    slot_end_period = slot_range_match.group(4)
+                                    
+                                    pref_start_min = self._parse_time_to_minutes(f"{pref_start_hour}{pref_start_period}")
+                                    pref_end_min = self._parse_time_to_minutes(f"{pref_end_hour}{pref_end_period}")
+                                    slot_start_min = self._parse_time_to_minutes(f"{slot_start_hour}{slot_start_period}")
+                                    slot_end_min = self._parse_time_to_minutes(f"{slot_end_hour}{slot_end_period}")
+                                    
+                                    # Check if ranges match exactly
+                                    if (pref_start_min == slot_start_min and pref_end_min == slot_end_min):
+                                        selected_time_viewgroup = vg
+                                        selected_time_text = viewgroup_text
+                                        break
+                            else:
+                                # Try to match specific time range (e.g., "6am-8am", "7am-9am")
+                                if time_pref_lower in viewgroup_text_lower:
+                                    selected_time_viewgroup = vg
+                                    selected_time_text = viewgroup_text
+                                    break
+                                
+                                # Extract time numbers from preference and check if they match
+                                # Only use this as last resort for non-range preferences
+                                time_numbers = re.findall(r'\d+', time_pref_lower)
+                                if time_numbers:
+                                    if all(num in viewgroup_text_lower for num in time_numbers):
+                                        selected_time_viewgroup = vg
+                                        selected_time_text = viewgroup_text
+                                        break
+                        except Exception:
+                            continue
+                    
+                    # Track seen time slots
+                    current_time_texts = {slot["time_text"] for slot in actual_time_slots if slot["time_text"]}
+                    new_items = current_time_texts - seen_time_texts
+                    seen_time_texts.update(current_time_texts)
+                    
+                    # If we found a match, break out of the while loop
+                    if selected_time_viewgroup:
+                        break
+                    
+                    # If we have a best match for specific time, use it
+                    if best_match and is_specific_time and not selected_time_viewgroup:
+                        selected_time_viewgroup = best_match["viewgroup"]
+                        selected_time_text = best_match["time_text"]
+                        break
+                    
+                    # If not found, scroll down and try again
+                    if not selected_time_viewgroup:
+                        # Check if we've reached the end (no new items after scrolling)
+                        if not new_items:
+                            no_new_items_count += 1
+                            # If we've scrolled 3 times with no new items, we've reached the end
+                            if no_new_items_count >= 3:
+                                break
+                        else:
+                            no_new_items_count = 0  # Reset counter when we find new items
+                        
+                        self._scroll_recycler_vertical(time_recycler, direction="down")
+                        scroll_attempts += 1
+                        actual_time_slots = find_time_slots()
+                        if not actual_time_slots:
+                            break
+                
+                # Use best match if we have one but didn't find perfect match
+                if not selected_time_viewgroup and best_match:
+                    selected_time_viewgroup = best_match["viewgroup"]
+                    selected_time_text = best_match["time_text"]
                 
                 if not selected_time_viewgroup:
-                    return {"success": False, "message": f"Could not find time slot matching preference '{time_preference}'"}
+                    return {"success": False, "message": f"Could not find time slot matching preference '{time_preference}' after scrolling"}
             else:
                 # No preference - select first available time slot (not "Full" or "Unavailable")
                 for slot in actual_time_slots:
