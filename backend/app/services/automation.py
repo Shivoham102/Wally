@@ -1465,9 +1465,9 @@ class AutomationService:
         except Exception as e:
             return {"success": False, "message": f"Failed to set address and delivery: {str(e)}"}
     
-    async def place_order(self, date_preference: Optional[str] = None, time_preference: Optional[str] = None) -> dict:
+    async def reserve_and_schedule_order(self, date_preference: Optional[str] = None, time_preference: Optional[str] = None) -> dict:
         """
-        Place an order in Walmart app.
+        Reserve and schedule an order in Walmart app.
         
         Note: Delivery option and address selection are handled at app startup, so this flow
         assumes they are already configured.
@@ -1480,7 +1480,7 @@ class AutomationService:
         5. Confirm reservation
         
         Returns:
-            Result dictionary
+            Result dictionary with date and time information
         """
         try:
             if not SELENIUM_AVAILABLE:
@@ -1587,13 +1587,114 @@ class AutomationService:
             
             return {
                 "success": True,
-                "message": "Successfully placed order",
+                "message": "Successfully reserved and scheduled order",
                 "date": date_selected.get("date"),
                 "time": time_selected.get("time")
             }
         
         except Exception as e:
-            return {"success": False, "message": f"Failed to place order: {str(e)}"}
+            return {"success": False, "message": f"Failed to reserve and schedule order: {str(e)}"}
+    
+    async def checkout_and_review_order(self) -> dict:
+        """
+        Checkout and review order in Walmart app.
+        
+        This should be called after reserve_and_schedule_order.
+        
+        Steps:
+        1. Click checkout all items button
+        2. Handle Review Order page:
+           - Opts out of substitutions
+           - Selects no tip
+           - Changes payment to preset card (from config)
+           - Sets phone number (from config)
+        
+        Returns:
+            Result dictionary
+        """
+        try:
+            if not SELENIUM_AVAILABLE:
+                return {"success": False, "message": "Selenium not installed. Please install: pip install selenium"}
+            
+            if not APPIUM_AVAILABLE:
+                return {"success": False, "message": "Appium not installed. Please install: pip install Appium-Python-Client"}
+            
+            # Auto-connect if not connected
+            if not self.connected:
+                await self.connect_device()
+            
+            if not self.driver:
+                return {"success": False, "message": "Device not connected. Please connect device first via /api/v1/automation/connect"}
+            
+            # Make sure Walmart app is open
+            await self.open_walmart_app()
+            time.sleep(2)
+            
+            wait = WebDriverWait(self.driver, 10)
+            
+            # Helper to find element using multiple strategies
+            def find_element_by_selector(uiselector: str = "", xpath: str = "", resource_id: str = "", by_type: str = "clickable"):
+                """Find element using UiSelector first, then fallback to XPath or resource_id."""
+                try:
+                    # Try UiSelector first (most reliable for Android)
+                    if uiselector:
+                        if by_type == "clickable":
+                            return wait.until(EC.element_to_be_clickable((By.ANDROID_UIAUTOMATOR, uiselector)))
+                        else:
+                            return wait.until(EC.presence_of_element_located((By.ANDROID_UIAUTOMATOR, uiselector)))
+                except:
+                    pass
+                
+                # Fallback to XPath
+                if xpath:
+                    try:
+                        if by_type == "clickable":
+                            return wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
+                        else:
+                            return wait.until(EC.presence_of_element_located((By.XPATH, xpath)))
+                    except:
+                        pass
+                
+                # Fallback to resource_id
+                if resource_id:
+                    try:
+                        if by_type == "clickable":
+                            return wait.until(EC.element_to_be_clickable((By.ID, resource_id)))
+                        else:
+                            return wait.until(EC.presence_of_element_located((By.ID, resource_id)))
+                    except:
+                        pass
+                
+                raise Exception(f"Element not found with UiSelector, XPath, or resource_id")
+            
+            # Step 1: Click checkout all items button
+            try:
+                checkout_button_id = selectors.get("checkout_all_items_button", {}).get("resource_id", "")
+                checkout_button_xpath = selectors.get("checkout_all_items_button", {}).get("xpath", "")
+                checkout_button_uiselector = selectors.get("checkout_all_items_button", {}).get("uiselector", "")
+                
+                checkout_button = find_element_by_selector(
+                    uiselector=checkout_button_uiselector,
+                    xpath=checkout_button_xpath,
+                    resource_id=checkout_button_id
+                )
+                checkout_button.click()
+                time.sleep(3)  # Wait for Review Order page to load
+            except Exception as e:
+                return {"success": False, "message": f"Step 1 failed - Could not click checkout button: {str(e)}"}
+            
+            # Step 2: Handle Review Order page
+            review_result = await self._handle_review_order_page()
+            if not review_result.get("success"):
+                return {"success": False, "message": f"Step 2 failed - {review_result.get('message', 'Could not complete review order')}"}
+            
+            return {
+                "success": True,
+                "message": "Successfully completed checkout and review order"
+            }
+        
+        except Exception as e:
+            return {"success": False, "message": f"Failed to checkout and review order: {str(e)}"}
     
     async def _select_delivery_date(self, date_preference: Optional[str] = None) -> dict:
         """
@@ -2353,6 +2454,454 @@ class AutomationService:
         
         except Exception as e:
             return {"success": False, "message": f"Failed to confirm reservation: {str(e)}"}
+    
+    def _scroll_and_find_element(self, uiselector: str = "", xpath: str = "", resource_id: str = "", max_scrolls: int = 15):
+        """
+        Scroll down the page to find an element that may not be initially visible.
+        Uses controlled scrolling with smaller increments and frequent checks.
+        
+        Args:
+            uiselector: UiSelector string
+            xpath: XPath string
+            resource_id: Resource ID string
+            max_scrolls: Maximum number of scroll attempts
+        
+        Returns:
+            Element if found, None otherwise
+        """
+        if not self.driver:
+            return None
+        
+        screen_size = self.driver.get_window_size()
+        center_x = int(screen_size['width'] * 0.5)
+        screen_height = screen_size['height']
+        
+        # Helper function to check if element exists and is visible
+        def check_element():
+            try:
+                element = None
+                if uiselector:
+                    try:
+                        element = self.driver.find_element(By.ANDROID_UIAUTOMATOR, uiselector)
+                    except:
+                        pass
+                
+                if not element and xpath:
+                    try:
+                        element = self.driver.find_element(By.XPATH, xpath)
+                    except:
+                        pass
+                
+                if not element and resource_id:
+                    try:
+                        element = self.driver.find_element(By.ID, resource_id)
+                    except:
+                        pass
+                
+                if element:
+                    # Check if element is visible and within screen bounds
+                    try:
+                        location = element.location
+                        size = element.size
+                        if location and size:
+                            # Check if element is within visible screen area
+                            element_y = location['y']
+                            element_height = size['height']
+                            # Element is visible if it's between -element_height and screen_height
+                            if -element_height <= element_y <= screen_height:
+                                return element
+                    except:
+                        pass
+            except:
+                pass
+            return None
+        
+        # First check if element is already visible
+        element = check_element()
+        if element:
+            return element
+        
+        # Use smaller, controlled scrolls
+        scroll_distance = int(screen_height * 0.30)  # 20% of screen height per scroll
+        
+        for scroll_attempt in range(max_scrolls):
+            # Check for element before scrolling
+            element = check_element()
+            if element:
+                return element
+            
+            # Scroll down slowly (swipe up with longer duration)
+            start_y = int(screen_height * 0.65)  # Start from 65% down
+            end_y = start_y - scroll_distance  # Move up by scroll_distance
+            
+            # Use longer duration (800ms) for slower, more controlled scroll
+            self.driver.swipe(center_x, start_y, center_x, end_y, 600)
+            time.sleep(0.4)  # Wait for scroll to settle
+            
+            # Check for element after scroll
+            element = check_element()
+            if element:
+                return element
+        
+        return None
+    
+    async def _handle_review_order_page(self) -> dict:
+        """
+        Handle the Review Order page by:
+        1. Click substitution preferences, toggle to opt out, press Done
+        2. Click custom tip button, enter 0
+        3. Click Change payment, select preset card, press confirm
+        4. Click send to different number, input preset number, press Save
+        
+        Returns:
+            Result dictionary
+        """
+        try:
+            if not SELENIUM_AVAILABLE or not APPIUM_AVAILABLE or not self.driver:
+                return {"success": False, "message": "Device not connected or dependencies not available"}
+            
+            print("[DEBUG] Starting review order page handling...")
+            wait = WebDriverWait(self.driver, 10)
+            
+            # Helper to find element using multiple strategies
+            def find_element_by_selector(uiselector: str = "", xpath: str = "", resource_id: str = "", by_type: str = "clickable", scroll: bool = True):
+                """Find element using UiSelector first, then fallback to XPath or resource_id, with optional scrolling."""
+                if scroll:
+                    element = self._scroll_and_find_element(uiselector=uiselector, xpath=xpath, resource_id=resource_id)
+                    if element:
+                        return element
+                
+                # Try normal find with wait
+                try:
+                    if uiselector:
+                        if by_type == "clickable":
+                            return wait.until(EC.element_to_be_clickable((By.ANDROID_UIAUTOMATOR, uiselector)))
+                        else:
+                            return wait.until(EC.presence_of_element_located((By.ANDROID_UIAUTOMATOR, uiselector)))
+                except:
+                    pass
+                
+                if xpath:
+                    try:
+                        if by_type == "clickable":
+                            return wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
+                        else:
+                            return wait.until(EC.presence_of_element_located((By.XPATH, xpath)))
+                    except:
+                        pass
+                
+                if resource_id:
+                    try:
+                        if by_type == "clickable":
+                            return wait.until(EC.element_to_be_clickable((By.ID, resource_id)))
+                        else:
+                            return wait.until(EC.presence_of_element_located((By.ID, resource_id)))
+                    except:
+                        pass
+                
+                raise Exception(f"Element not found with UiSelector, XPath, or resource_id")
+            
+            # Step 1: Click substitution preferences, toggle to opt out, press Done
+            try:
+                print("[DEBUG] Step 1: Handling substitution preferences...")
+                sub_pref_config = selectors.get("substitution_preferences_button", {})
+                sub_pref_id = sub_pref_config.get("resource_id", "")
+                sub_pref_xpath = sub_pref_config.get("xpath", "")
+                sub_pref_uiselector = sub_pref_config.get("uiselector", "")
+                
+                print(f"[DEBUG] Looking for substitution preferences button (resource_id: {sub_pref_id})...")
+                sub_pref_button = find_element_by_selector(
+                    uiselector=sub_pref_uiselector,
+                    xpath=sub_pref_xpath,
+                    resource_id=sub_pref_id,
+                    scroll=True
+                )
+                print("[DEBUG] Found substitution preferences button, clicking...")
+                sub_pref_button.click()
+                time.sleep(2)  # Wait for substitution preferences menu to open
+                print("[DEBUG] Substitution preferences menu opened")
+                
+                # Find and toggle the switch to opt out
+                print("[DEBUG] Looking for substitutions toggle switch...")
+                toggle_config = selectors.get("substitutions_toggle", {})
+                toggle_id = toggle_config.get("resource_id", "")
+                toggle_xpath = toggle_config.get("xpath", "")
+                toggle_uiselector = toggle_config.get("uiselector", "")
+                
+                toggle_switch = find_element_by_selector(
+                    uiselector=toggle_uiselector,
+                    xpath=toggle_xpath,
+                    resource_id=toggle_id,
+                    scroll=False
+                )
+                print("[DEBUG] Found toggle switch, checking state...")
+                # Check if toggle is on, if so, click to turn it off
+                try:
+                    is_checked = toggle_switch.get_attribute("checked")
+                    print(f"[DEBUG] Toggle state: {is_checked}")
+                    if is_checked == "true":
+                        print("[DEBUG] Toggle is on, clicking to turn it off...")
+                        toggle_switch.click()
+                        time.sleep(0.5)
+                    else:
+                        print("[DEBUG] Toggle is already off")
+                except:
+                    # If we can't check the state, just click it
+                    print("[DEBUG] Could not check toggle state, clicking anyway...")
+                    toggle_switch.click()
+                    time.sleep(0.5)
+                
+                # Click Done button
+                print("[DEBUG] Looking for Done button...")
+                done_config = selectors.get("substitutions_done_button", {})
+                done_xpath = done_config.get("xpath", "")
+                done_uiselector = done_config.get("uiselector", "")
+                
+                done_button = find_element_by_selector(
+                    uiselector=done_uiselector,
+                    xpath=done_xpath,
+                    resource_id="",
+                    scroll=False
+                )
+                print("[DEBUG] Found Done button, clicking...")
+                done_button.click()
+                time.sleep(2)  # Wait to return to review order page
+                print("[DEBUG] Step 1 completed: Substitution preferences handled")
+            except Exception as e:
+                print(f"[DEBUG] Step 1 failed: {str(e)}")
+                return {"success": False, "message": f"Step 1 failed - Could not handle substitution preferences: {str(e)}"}
+            
+            # Step 2: Click custom tip button and enter 0
+            try:
+                print("[DEBUG] Step 2: Handling custom tip (entering 0)...")
+                custom_tip_config = selectors.get("custom_tip_button", {})
+                custom_tip_id = custom_tip_config.get("resource_id", "")
+                custom_tip_xpath = custom_tip_config.get("xpath", "")
+                custom_tip_uiselector = custom_tip_config.get("uiselector", "")
+                
+                print(f"[DEBUG] Looking for custom tip button (resource_id: {custom_tip_id})...")
+                custom_tip_button = find_element_by_selector(
+                    uiselector=custom_tip_uiselector,
+                    xpath=custom_tip_xpath,
+                    resource_id=custom_tip_id,
+                    scroll=True
+                )
+                print("[DEBUG] Found custom tip button, clicking...")
+                custom_tip_button.click()
+                time.sleep(1)  # Wait for tip input field to appear
+                print("[DEBUG] Custom tip input field should be visible now")
+                
+                # Find and input 0 in the custom tip input field
+                print("[DEBUG] Looking for custom tip input field...")
+                custom_tip_input_config = selectors.get("custom_tip_input_field", {})
+                custom_tip_input_id = custom_tip_input_config.get("resource_id", "")
+                custom_tip_input_xpath = custom_tip_input_config.get("xpath", "")
+                custom_tip_input_uiselector = custom_tip_input_config.get("uiselector", "")
+                
+                custom_tip_input = find_element_by_selector(
+                    uiselector=custom_tip_input_uiselector,
+                    xpath=custom_tip_input_xpath,
+                    resource_id=custom_tip_input_id,
+                    scroll=False
+                )
+                print("[DEBUG] Found custom tip input field, clearing and entering 0...")
+                custom_tip_input.clear()
+                custom_tip_input.send_keys("0")
+                time.sleep(0.5)
+                print("[DEBUG] Entered 0 in custom tip field")
+                
+                # Press Done button on Android system keyboard using keycode
+                # Keycode 66 = ENTER/DONE key on Android keyboard
+                print("[DEBUG] Pressing Done button on Android system keyboard (keycode 66)...")
+                try:
+                    self.driver.press_keycode(66)
+                    print("[DEBUG] Done button pressed successfully using keycode 66")
+                    time.sleep(0.5)  # Wait for keyboard to dismiss and tip to be saved
+                    print("[DEBUG] Keyboard dismissed and tip saved")
+                except Exception as e:
+                    print(f"[DEBUG] Warning: Could not press Done keycode: {str(e)}")
+                    # Fallback to hide_keyboard
+                    try:
+                        self.driver.hide_keyboard()
+                        print("[DEBUG] Fallback: Keyboard dismissed using hide_keyboard()")
+                        time.sleep(0.5)
+                    except Exception as e2:
+                        print(f"[DEBUG] Warning: Could not dismiss keyboard: {str(e2)}")
+                
+                print("[DEBUG] Step 2 completed: Custom tip set to 0 and Done button pressed")
+            except Exception as e:
+                print(f"[DEBUG] Step 2 failed: {str(e)}")
+                return {"success": False, "message": f"Step 2 failed - Could not handle custom tip: {str(e)}"}
+            
+            # Step 3: Click Change payment, select preset card, press confirm
+            try:
+                print("[DEBUG] Step 3: Handling payment selection...")
+                change_payment_config = selectors.get("change_payment_button", {})
+                change_payment_id = change_payment_config.get("resource_id", "")
+                change_payment_xpath = change_payment_config.get("xpath", "")
+                change_payment_uiselector = change_payment_config.get("uiselector", "")
+                
+                print(f"[DEBUG] Looking for change payment button (resource_id: {change_payment_id})...")
+                change_payment_button = find_element_by_selector(
+                    uiselector=change_payment_uiselector,
+                    xpath=change_payment_xpath,
+                    resource_id=change_payment_id,
+                    scroll=True
+                )
+                print("[DEBUG] Found change payment button, clicking...")
+                change_payment_button.click()
+                time.sleep(2)  # Wait for payment selection menu to open
+                print("[DEBUG] Payment selection menu opened")
+                
+                # Find and select the preset card
+                if not settings.card_ending:
+                    print("[DEBUG] ERROR: card_ending not configured in settings")
+                    return {"success": False, "message": "Step 3 failed - card_ending not configured in settings"}
+                
+                card_ending = settings.card_ending
+                print(f"[DEBUG] Looking for card ending in: {card_ending}")
+                card_config = selectors.get("credit_card_radio_button", {})
+                card_xpath_pattern = card_config.get("xpath_pattern", "")
+                card_uiselector_pattern = card_config.get("uiselector_pattern", "")
+                
+                # Replace {card_ending} in patterns
+                card_xpath = card_xpath_pattern.replace("{card_ending}", card_ending) if card_xpath_pattern else ""
+                card_uiselector = card_uiselector_pattern.replace("{card_ending}", card_ending) if card_uiselector_pattern else ""
+                
+                print(f"[DEBUG] Searching for card with pattern: {card_xpath[:100] if card_xpath else 'N/A'}...")
+                card_radio = find_element_by_selector(
+                    uiselector=card_uiselector,
+                    xpath=card_xpath,
+                    resource_id="",
+                    scroll=True
+                )
+                print("[DEBUG] Found card radio button, clicking...")
+                card_radio.click()
+                time.sleep(1)
+                print(f"[DEBUG] Selected card ending in: {card_ending}")
+                
+                # Click confirm button
+                print("[DEBUG] Looking for confirm button...")
+                confirm_config = selectors.get("confirm_card_button", {})
+                confirm_id = confirm_config.get("resource_id", "")
+                confirm_xpath = confirm_config.get("xpath", "")
+                confirm_uiselector = confirm_config.get("uiselector", "")
+                
+                confirm_button = find_element_by_selector(
+                    uiselector=confirm_uiselector,
+                    xpath=confirm_xpath,
+                    resource_id=confirm_id,
+                    scroll=False
+                )
+                print("[DEBUG] Found confirm button, clicking...")
+                confirm_button.click()
+                time.sleep(3)  # Wait to return to review order page and for page to settle
+                print("[DEBUG] Step 3 completed: Payment selection handled")
+                print("[DEBUG] Note: Page may have scrolled back to top after payment confirmation")
+            except Exception as e:
+                print(f"[DEBUG] Step 3 failed: {str(e)}")
+                return {"success": False, "message": f"Step 3 failed - Could not handle payment selection: {str(e)}"}
+            
+            # Step 4: Click send to different number, input preset number, press Save
+            try:
+                print("[DEBUG] Step 4: Handling phone number...")
+                send_number_config = selectors.get("send_to_different_number_button", {})
+                send_number_id = send_number_config.get("resource_id", "")
+                send_number_xpath = send_number_config.get("xpath", "")
+                send_number_uiselector = send_number_config.get("uiselector", "")
+                
+                print(f"[DEBUG] Looking for send to different number button (resource_id: {send_number_id})...")
+                send_number_button = find_element_by_selector(
+                    uiselector=send_number_uiselector,
+                    xpath=send_number_xpath,
+                    resource_id=send_number_id,
+                    scroll=True
+                )
+                print("[DEBUG] Found send to different number button, clicking...")
+                send_number_button.click()
+                print("[DEBUG] Clicked send to different number button, waiting for modal to open...")
+                time.sleep(2)  # Wait for modal/popup to appear
+                print("[DEBUG] Modal should be open now")
+                
+                # Find and input phone number in the modal
+                if not settings.phone_number:
+                    print("[DEBUG] ERROR: phone_number not configured in settings")
+                    return {"success": False, "message": "Step 4 failed - phone_number not configured in settings"}
+                
+                print(f"[DEBUG] Looking for phone number input field in modal...")
+                phone_config = selectors.get("phone_number_input_field", {})
+                phone_xpath = phone_config.get("xpath", "")
+                phone_uiselector = phone_config.get("uiselector", "")
+                phone_resource_id = phone_config.get("resource_id", "")
+                
+                # Find the phone number input field in the modal (no scrolling needed, it's in a modal)
+                print(f"[DEBUG] Looking for phone number field in modal (resource_id: {phone_resource_id})...")
+                phone_input = None
+                
+                # Try to find the inner EditText directly
+                try:
+                    phone_input = find_element_by_selector(
+                        uiselector=phone_uiselector,
+                        xpath=phone_xpath,
+                        resource_id="",
+                        scroll=False  # No scrolling needed in modal
+                    )
+                    print("[DEBUG] Found phone number input field using selector")
+                except Exception as e1:
+                    print(f"[DEBUG] Selector method failed: {str(e1)}, trying fallback...")
+                    # Fallback: find outer container, then inner EditText
+                    try:
+                        outer_container = wait.until(EC.presence_of_element_located((By.ID, phone_resource_id)))
+                        print("[DEBUG] Found outer container, looking for inner EditText...")
+                        inner_edittexts = outer_container.find_elements(By.XPATH, ".//android.widget.EditText")
+                        if inner_edittexts:
+                            phone_input = inner_edittexts[0]
+                            print("[DEBUG] Found inner EditText via fallback method")
+                        else:
+                            raise Exception("Could not find inner EditText in container")
+                    except Exception as e2:
+                        print(f"[DEBUG] Fallback method also failed: {str(e2)}")
+                        raise Exception(f"Could not find phone number input field in modal: {str(e2)}")
+                
+                if not phone_input:
+                    raise Exception("Phone number input field not found")
+                
+                print(f"[DEBUG] Found phone number input field, clicking to focus...")
+                phone_input.click()
+                time.sleep(0.3)
+                
+                print(f"[DEBUG] Entering phone number: {settings.phone_number}")
+                phone_input.clear()
+                phone_input.send_keys(settings.phone_number)
+                time.sleep(0.5)
+                print("[DEBUG] Phone number entered")
+                
+                # Click Save button
+                print("[DEBUG] Looking for Save button...")
+                save_config = selectors.get("save_number_button", {})
+                save_xpath = save_config.get("xpath", "")
+                save_uiselector = save_config.get("uiselector", "")
+                
+                save_button = find_element_by_selector(
+                    uiselector=save_uiselector,
+                    xpath=save_xpath,
+                    resource_id="",
+                    scroll=False
+                )
+                print("[DEBUG] Found Save button, clicking...")
+                save_button.click()
+                time.sleep(2)  # Wait to return to review order page
+                print("[DEBUG] Step 4 completed: Phone number handled")
+            except Exception as e:
+                print(f"[DEBUG] Step 4 failed: {str(e)}")
+                return {"success": False, "message": f"Step 4 failed - Could not handle phone number: {str(e)}"}
+            
+            print("[DEBUG] All review order page steps completed successfully!")
+            return {"success": True, "message": "Review order page completed successfully"}
+        
+        except Exception as e:
+            print(f"[DEBUG] Failed to handle review order page: {str(e)}")
+            return {"success": False, "message": f"Failed to handle review order page: {str(e)}"}
     
     def disconnect(self):
         """Disconnect from device."""

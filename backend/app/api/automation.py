@@ -207,10 +207,10 @@ class PlaceOrderRequest(BaseModel):
     time_preference: Optional[str] = None  # e.g., "6am-8am", "7am-9am", "morning", "afternoon"
 
 
-@router.post("/place-order")
-async def place_order(request: Optional[PlaceOrderRequest] = None):
+@router.post("/reserve-and-schedule-order")
+async def reserve_and_schedule_order(request: Optional[PlaceOrderRequest] = None):
     """
-    Place an order in Walmart app.
+    Reserve and schedule an order in Walmart app.
     
     Note: Delivery option and address selection are handled at app startup.
     
@@ -222,7 +222,7 @@ async def place_order(request: Optional[PlaceOrderRequest] = None):
     5. Confirms reservation
     
     Example request:
-    POST /api/v1/automation/place-order
+    POST /api/v1/automation/reserve-and-schedule-order
     {
         "date_preference": "tomorrow",
         "time_preference": "morning"
@@ -232,16 +232,47 @@ async def place_order(request: Optional[PlaceOrderRequest] = None):
         date_pref = request.date_preference if request else None
         time_pref = request.time_preference if request else None
         
-        result = await automation_service.place_order(
+        result = await automation_service.reserve_and_schedule_order(
             date_preference=date_pref,
             time_preference=time_pref
         )
         return {
-            "intent": "place_order",
+            "intent": "reserve_and_schedule_order",
             "result": result,
             "date_preference": date_pref,
             "time_preference": time_pref,
-            "note": "Places order (address and delivery option should be set at app startup)"
+            "note": "Reserves and schedules order (address and delivery option should be set at app startup)"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to reserve and schedule order: {str(e)}")
+
+
+@router.post("/place-order")
+async def place_order():
+    """
+    Complete checkout and review order in Walmart app.
+    
+    This should be called after reserve-and-schedule-order.
+    
+    This endpoint:
+    1. Clicks checkout all items button
+    2. Handles Review Order page:
+       - Opts out of substitutions
+       - Sets custom tip to 0
+       - Changes payment to preset card (from config)
+       - Sets phone number (from config)
+    
+    Example request:
+    POST /api/v1/automation/place-order
+    
+    Note: Requires card_ending and phone_number to be configured in settings for payment and phone number steps.
+    """
+    try:
+        result = await automation_service.checkout_and_review_order()
+        return {
+            "intent": "place_order",
+            "result": result,
+            "note": "Completes checkout and review order (should be called after reserve-and-schedule-order)"
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to place order: {str(e)}")

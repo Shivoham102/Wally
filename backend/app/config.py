@@ -26,9 +26,11 @@ class Settings(BaseSettings):
     walmart_app_package: str = "com.walmart.android"
     walmart_app_activity: str = ".activity.MainActivity"
     
-    # User Configuration
-    customer_name: Optional[str] = "Soham Angal"  # Customer name for order matching
-    customer_address: Optional[str] = "119 W Oakland Ave, Columbus, OH, 43201" # Customer address for matching (e.g., "119 W Oakland Ave, Columbus, OH 43201")
+    # User Configuration (loaded from .env file only)
+    customer_name: Optional[str] = None
+    customer_address: Optional[str] = None 
+    card_ending: Optional[str] = None 
+    phone_number: Optional[str] = None
     
     # AI Configuration
     ai_model: str = "gpt-4-turbo-preview"

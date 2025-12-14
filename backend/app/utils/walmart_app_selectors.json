@@ -241,5 +241,75 @@
         "xpath": "//android.widget.Button[@resource-id=\"com.walmart.android:id/select_address_continue_button\"]",
         "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/select_address_continue_button\")",
         "note": "Button to save/confirm address selection from home page - different from cart_view. To be configured based on actual UI dump."
+    },
+    "checkout_all_items_button":{
+        "resource_id": "com.walmart.android:id/cart_continue_to_checkout_button",
+        "xpath": "//android.widget.Button[@resource-id=\"com.walmart.android:id/cart_continue_to_checkout_button\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/cart_continue_to_checkout_button\")"
+    },
+    "substitution_preferences_button":{
+        "resource_id": "com.walmart.android:id/title",
+        "xpath": "//android.widget.TextView[@resource-id=\"com.walmart.android:id/title\" and contains(@content-desc, 'substitution')]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/title\").descriptionContains(\"substitution\")",
+        "note": "Button to choose substitution preferences - uses resource_id with content-desc filter"
+    },
+    "substitutions_toggle":{
+        "resource_id": "com.walmart.android:id/ld_switch_toggle",
+        "xpath": "//android.widget.Switch[@resource-id=\"com.walmart.android:id/ld_switch_toggle\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/ld_switch_toggle\")",
+        "note": "Toggle switch to opt out of substitutions"
+    },
+    "substitutions_done_button":{
+        "xpath": "//android.widget.Button[@text=\"Done\"]",
+        "uiselector": "new UiSelector().text(\"Done\")"
+    },
+    "custom_tip_button":{
+        "resource_id": "com.walmart.android:id/custom_tip_one_line",
+        "xpath": "//android.widget.TextView[@resource-id=\"com.walmart.android:id/custom_tip_one_line\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/custom_tip_one_line\")"
+    },
+    "custom_tip_input_field":{
+        "resource_id": "com.walmart.android:id/et_checkout_custom_tip_amount",
+        "xpath": "//android.widget.EditText[@resource-id=\"com.walmart.android:id/et_checkout_custom_tip_amount\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/et_checkout_custom_tip_amount\")"
+    },
+    "change_payment_button":{
+        "resource_id": "com.walmart.android:id/change_payments_button",
+        "xpath": "//android.widget.Button[@resource-id=\"com.walmart.android:id/change_payments_button\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/change_payments_button\")"
+    },
+    "credit_cards_recycler_view":{
+        "xpath":"(//androidx.recyclerview.widget.RecyclerView[@resource-id=\"com.walmart.android:id/payment_group_list_of_cards\"])[2]",
+        "uiselector":"(//androidx.recyclerview.widget.RecyclerView[@resource-id=\"com.walmart.android:id/payment_group_list_of_cards\"])[2]"
+    },
+    "credit_card_radio_button":{
+        "xpath_pattern": "//android.widget.RadioButton[contains(@content-desc, 'Ending in {card_ending}')]",
+        "uiselector_pattern": "new UiSelector().className(\"android.widget.RadioButton\").descriptionContains(\"Ending in {card_ending}\")",
+        "note": "Radio button for credit card selection - card_ending will be replaced dynamically from config (e.g., '0 7 9 7')"
+    },
+    "confirm_card_button":{
+        "resource_id": "com.walmart.android:id/confirm_button",
+        "xpath": "//android.widget.Button[@resource-id=\"com.walmart.android:id/confirm_button\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/confirm_button\")"
+    },
+    "send_to_different_number_button":{
+        "resource_id": "com.walmart.android:id/send_to_different_number_button",
+        "xpath": "//android.widget.Button[@resource-id=\"com.walmart.android:id/send_to_different_number_button\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/send_to_different_number_button\")"
+    },
+    "phone_number_input_field":{
+        "resource_id": "com.walmart.android:id/checkout_add_different_phone_field",
+        "xpath": "//android.widget.EditText[@resource-id=\"com.walmart.android:id/checkout_add_different_phone_field\"]/android.widget.FrameLayout/android.widget.EditText",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/checkout_add_different_phone_field\").childSelector(new UiSelector().className(\"android.widget.FrameLayout\")).childSelector(new UiSelector().className(\"android.widget.EditText\"))",
+        "note": "Phone number input field - targets the inner EditText nested inside FrameLayout within the outer EditText container"
+    },
+    "save_number_button":{
+        "xpath": "//android.widget.Button[@text=\"Save\"]",
+        "uiselector": "new UiSelector().text(\"Save\")"
+    },
+    "place_order_button":{
+        "resource_id": "com.walmart.android:id/button_place_order",
+        "xpath": "//android.widget.Button[@resource-id=\"com.walmart.android:id/button_place_order\"]",
+        "uiselector": "new UiSelector().resourceId(\"com.walmart.android:id/button_place_order\")"
     }
 }

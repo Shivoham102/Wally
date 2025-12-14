@@ -98,10 +98,11 @@ curl "http://localhost:8000/api/v1/orders/history"
 curl -X POST http://localhost:8000/api/v1/automation/add-items-direct -H "Content-Type: application/json" -d "{\"intent\": \"add_items\", \"items\": [{\"item\": \"greek yogurt\", \"quantity\": 2}, {\"item\": \"coffee\", \"quantity\": 1}]}"
 
 curl -X POST http://localhost:8000/api/v1/automation/add-items-direct -H "Content-Type: application/json" -d "{\"intent\": \"add_items\", \"items\": [{\"item\": \"whole milk\", \"quantity\": 2}, {\"item\": \"non-fat Greek yogurt\", \"quantity\": 1}, {\"item\": \"tomatoes\", \"quantity\": 10}, {\"item\": \"Nestle Toll House 100% pure cocoa powder\", \"quantity\": 1}, {\"item\": \"Azumaya Tofu, extra firm\", \"quantity\": 4}, {\"item\": \"fresh cantaloupe\", \"quantity\": 1}, {\"item\": \"fresh mangoes\", \"quantity\": 3}, {\"item\": \"fresh grapefruits\", \"quantity\": 2}, {\"item\": \"fresh cucumber\", \"quantity\": 1}, {\"item\": \"Great Value Old Fashioned Oats\", \"quantity\": 1}]}"
-```
 
-```bash
 curl -X POST http://localhost:8000/api/v1/automation/reorder-last-order -H "Content-Type: application/json"
+
+
+
 ```
 
 ## Troubleshooting
