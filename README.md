@@ -14,6 +14,7 @@ A voice-powered AI agent that helps you order from the Walmart mobile app using 
 ### Core Technologies
 - **Backend**: Python 3.11+
 - **API Framework**: FastAPI
+- **Mobile App**: React Native with Expo (TypeScript)
 - **Voice Recognition**: OpenAI Whisper API (or Google Speech-to-Text)
 - **AI Agent**: OpenAI GPT-4 / GPT-4 Turbo (or Anthropic Claude)
 - **Mobile Automation**: Appium (cross-platform) or Android ADB
@@ -67,7 +68,7 @@ A voice-powered AI agent that helps you order from the Walmart mobile app using 
 
 ```
 Wally/
-├── backend/
+├── backend/                     # Python FastAPI backend
 │   ├── app/
 │   │   ├── __init__.py
 │   │   ├── main.py              # FastAPI application
@@ -82,13 +83,22 @@ Wally/
 │   │   └── utils/               # Utilities
 │   ├── tests/
 │   └── requirements.txt
+├── mobile/                      # React Native Expo mobile app
+│   ├── app/                     # Expo Router screens
+│   │   ├── (tabs)/             # Tab navigation
+│   │   ├── onboarding.tsx      # First-time setup
+│   │   └── _layout.tsx         # Root layout
+│   ├── api/                     # API client layer
+│   ├── config/                  # Configuration & storage
+│   └── package.json
 ├── automation/
 │   ├── android/                 # Android automation scripts
 │   └── ios/                     # iOS automation scripts (future)
 ├── config/
 │   └── config.yaml              # Configuration file
 ├── env.example                  # Environment variables template
-└── README.md
+├── README.md                    # This file
+└── MOBILE_SETUP.md             # Mobile app setup guide
 ```
 
 ## Setup Instructions
@@ -129,12 +139,43 @@ Wally/
 
 ## Usage
 
-### Starting the Voice Agent
+### Starting the Backend
 
-1. Connect your Android device via USB
-2. Enable USB debugging
-3. Start the backend server
-4. Send voice commands via the API or web interface
+1. Start the backend server:
+   ```bash
+   cd backend
+   uvicorn app.main:app --reload
+   ```
+
+2. The backend will be available at `http://localhost:8000`
+   - API docs: `http://localhost:8000/docs`
+   - Health check: `http://localhost:8000/health`
+
+### Using the Mobile App
+
+1. **Setup Mobile App** (see [MOBILE_SETUP.md](MOBILE_SETUP.md) for details):
+   ```bash
+   cd mobile
+   npm install
+   npm start
+   ```
+
+2. **First Launch**:
+   - Grant microphone permission
+   - Enter backend URL (local network IP or cloud URL)
+   - Enable wireless debugging (for automation)
+
+3. **Using Voice Commands**:
+   - Open the Voice tab
+   - Tap record button and speak your command
+   - View transcription and results
+
+### Alternative: API Usage
+
+You can also use the backend API directly:
+- Send voice commands via `POST /api/v1/voice/process-command`
+- View order history via `GET /api/v1/orders/history`
+- See API documentation at `http://localhost:8000/docs`
 
 ### Example Commands
 
@@ -146,11 +187,11 @@ Wally/
 ## Development Roadmap
 
 - [x] Project structure and setup
-- [ ] Voice recognition integration
-- [ ] AI agent for intent recognition
-- [ ] Android automation for Walmart app
-- [ ] Order history tracking
-- [ ] Web interface for testing
+- [x] Voice recognition integration
+- [x] AI agent for intent recognition
+- [x] Android automation for Walmart app
+- [x] Order history tracking
+- [x] Mobile app (React Native/Expo)
 - [ ] iOS support
 - [ ] Support for other shopping apps
 
